@@ -1,0 +1,26 @@
+llm:
+  api_base: https://open.bigmodel.cn/api/paas/v4
+  api_key: fc08afeb3e7c49e49e64f937bf0d204b.g7adqeDVByxEsV36
+  fallback_model: openai/glm-4-flash
+  max_concurrent: 1
+  phase_models:
+    phase_1: openai/glm-4-flash
+    phase_2a: openai/glm-4.7
+    phase_2b: openai/glm-4-flash
+    phase_3a: openai/glm-4-flash
+    phase_3b: openai/glm-4.7
+    architect: openai/glm-4.7
+  retry_max: 3
+  temperature:
+    phase_1: 0.0
+    phase_2a: 0.3
+    phase_2b: 0.0
+    phase_3a: 0.2
+    phase_3b: 0.3
+    architect: 0.3
+  timeout: 120
+output_dir: .hippocampus
+structure_prompt_max_chars: 10000
+structure_prompt_llm_enhance: true
+target: .
+trim_budget: 10000

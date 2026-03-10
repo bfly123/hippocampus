@@ -1,0 +1,17 @@
+vendor/
+__pycache__/
+*.pyc
+*.egg-info/
+dist/
+build/
+.ccb/
+tmp/
+.llmproxy/
+
+# Hippocampus directory - ignore most files except config and structure
+.hippocampus/*
+!.hippocampus/config.yaml
+!.hippocampus/structure-prompt.md
+!.hippocampus/hippocampus-viz.html
+!.hippocampus/queries/
+!.hippocampus/queries/*.scm

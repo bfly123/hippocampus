@@ -1,0 +1,146 @@
+"""CLI integration tests — hippo commands against ~/yunwei/claude_codex."""
+
+from __future__ import annotations
+
+import json
+import shutil
+from pathlib import Path
+
+import pytest
+from click.testing import CliRunner
+
+from hippocampus.cli import cli
+
+
+@pytest.fixture
+def runner():
+    return CliRunner()
+
+
+class TestCliHelp:
+    def test_main_help(self, runner):
+        result = runner.invoke(cli, ["--help"])
+        assert result.exit_code == 0
+        assert "Hippocampus" in result.output
+
+    def test_init_help(self, runner):
+        result = runner.invoke(cli, ["init", "--help"])
+        assert result.exit_code == 0
+        assert "--target" in result.output
+
+    def test_sig_extract_help(self, runner):
+        result = runner.invoke(cli, ["sig-extract", "--help"])
+        assert result.exit_code == 0
+
+    def test_tree_help(self, runner):
+        result = runner.invoke(cli, ["tree", "--help"])
+        assert result.exit_code == 0
+
+    def test_trim_help(self, runner):
+        result = runner.invoke(cli, ["trim", "--help"])
+        assert result.exit_code == 0
+        assert "--budget" in result.output
+
+    def test_hooks_help(self, runner):
+        result = runner.invoke(cli, ["hooks", "--help"])
+        assert result.exit_code == 0
+        assert "install" in result.output
+
+    def test_memory_command_removed(self, runner):
+        result = runner.invoke(cli, ["memory", "--help"])
+        assert result.exit_code != 0
+        assert "No such command 'memory'" in result.output
+
+    def test_snapshot_help(self, runner):
+        result = runner.invoke(cli, ["snapshot", "--help"])
+        assert result.exit_code == 0
+        assert "save" in result.output
+
+    def test_stats_help(self, runner):
+        result = runner.invoke(cli, ["stats", "--help"])
+        assert result.exit_code == 0
+        assert "--history" in result.output
+
+    def test_overview_help(self, runner):
+        result = runner.invoke(cli, ["overview", "--help"])
+        assert result.exit_code == 0
+        assert "--budget" in result.output
+
+    def test_search_help(self, runner):
+        result = runner.invoke(cli, ["search", "--help"])
+        assert result.exit_code == 0
+        assert "--pattern" in result.output
+
+
+class TestCliInit:
+    def test_init_creates_hippo_dir(self, runner, tmp_path):
+        result = runner.invoke(cli, ["init", "--target", str(tmp_path)])
+        assert result.exit_code == 0
+        hippo_dir = tmp_path / ".hippocampus"
+        assert hippo_dir.is_dir()
+        assert (hippo_dir / "config.yaml").exists()
+
+    def test_init_idempotent(self, runner, tmp_path):
+        runner.invoke(cli, ["init", "--target", str(tmp_path)])
+        result = runner.invoke(cli, ["init", "--target", str(tmp_path)])
+        assert result.exit_code == 0
+        assert "already exists" in result.output
+
+
+class TestCliSigExtract:
+    """System test: run hippo sig-extract against real codebase."""
+
+    def test_sig_extract_on_target(self, runner, target_path):
+        """Run sig-extract on claude_codex, verify output."""
+        # First init to set up queries
+        runner.invoke(cli, ["init", "--target", str(target_path)])
+        result = runner.invoke(cli, [
+            "sig-extract", "--target", str(target_path),
+        ])
+        assert result.exit_code == 0, f"Failed: {result.output}"
+        assert "signatures" in result.output
+
+        # Verify output file
+        out_file = target_path / ".hippocampus" / "code-signatures.json"
+        assert out_file.exists()
+        data = json.loads(out_file.read_text())
+        assert data["version"] == 1
+        assert len(data["files"]) > 0
+
+
+class TestCliTree:
+    """System test: run hippo tree against real codebase (requires repomix)."""
+
+    def test_tree_on_target(self, runner, target_path):
+        """Run tree on claude_codex, verify output."""
+        runner.invoke(cli, ["init", "--target", str(target_path)])
+        result = runner.invoke(cli, [
+            "tree", "--target", str(target_path),
+        ])
+        assert result.exit_code == 0, f"Failed: {result.output}"
+        assert "nodes" in result.output
+
+        out_file = target_path / ".hippocampus" / "tree.json"
+        assert out_file.exists()
+        data = json.loads(out_file.read_text())
+        assert data["version"] == 1
+        assert data["root"]["type"] == "dir"
+
+
+class TestCliStructurePrompt:
+    """Test hippo structure-prompt (depends on tree.json existing)."""
+
+    def test_structure_prompt_after_tree(self, runner, target_path):
+        tree_file = target_path / ".hippocampus" / "tree.json"
+        if not tree_file.exists():
+            pytest.skip("tree.json not found, run tree test first")
+        result = runner.invoke(cli, [
+            "structure-prompt", "--target", str(target_path),
+        ])
+        assert result.exit_code == 0, f"Failed: {result.output}"
+        assert "chars" in result.output
+
+        out = target_path / ".hippocampus" / "structure-prompt.md"
+        assert out.exists()
+        md = out.read_text()
+        assert md.startswith("# Repository Structure")
