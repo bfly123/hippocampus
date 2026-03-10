@@ -7,6 +7,7 @@ from ..config import HippoConfig
 from ..constants import HIPPO_DIR
 from ..tag_vocab import TagVocab, is_valid_new_tag, load_vocab, save_vocab
 from ..utils import is_doc, is_hidden
+from .index_gen_phase1_runner import run_phase1_processors
 
 
 async def phase_1_impl(
@@ -117,8 +118,11 @@ async def phase_1_impl(
         results[fpath] = data
         cache[fpath] = {"hash": current_hashes[fpath], "result": data}
 
-    for fp in to_process:
-        await process_file(fp)
+    await run_phase1_processors(
+        to_process,
+        process_file=process_file,
+        verbose=verbose,
+    )
 
     for fp in removed:
         del cache[fp]

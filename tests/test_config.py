@@ -120,6 +120,8 @@ class TestLoadConfig:
         cfg = load_config(None, project_root=tmp_path / "project")
         assert cfg.llm.base_url == "https://arch.example/v1"
         assert cfg.llm.api_key == "arch-key"
+        assert cfg.llm.max_concurrent == 4
+        assert cfg.llm.timeout == 120
         assert cfg.llm.phase_models.phase_1 == "gpt-5.3-codex-medium"
         assert cfg.llm.phase_models.architect == "gpt-5.3-codex high"
 
@@ -159,6 +161,8 @@ class TestLoadConfig:
         assert cfg.llm.api_key == "arch-key"
         assert cfg.llm.provider_type == "glm"
         assert cfg.llm.api_style == "openai_responses"
+        assert cfg.llm.max_concurrent == 4
+        assert cfg.llm.timeout == 120
         assert cfg.llm.extra_headers == {"x-test": "1"}
         assert cfg.llm.phase_models.phase_1 == "gpt-5.3-codex-medium"
         assert cfg.llm.phase_models.architect == "gpt-5.3-codex high"
