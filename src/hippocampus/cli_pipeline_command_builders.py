@@ -25,7 +25,7 @@ def _echo_index_start(ctx: Any, *, no_llm: bool, phase_num: int | None) -> None:
 
 def _load_index_config(ctx: Any, out: Path):
     cfg_path = Path(ctx.obj["config_path"]) if ctx.obj["config_path"] else out / CONFIG_FILE
-    return load_config(cfg_path if cfg_path.exists() else None)
+    return load_config(cfg_path if cfg_path.exists() else None, project_root=out.parent)
 
 
 def build_repomap_command():
@@ -197,4 +197,3 @@ def build_run_command(*, command_refs: dict[str, object], trim_cmd, index_cmd):
         )
 
     return run
-

@@ -23,7 +23,7 @@ async def phase_1_impl(
     detect_lang_hint_fn: Callable[[Path], str],
 ) -> dict[str, dict]:
     from ..llm.client import HippoLLM
-    from ..llm.prompts import PHASE_1_SYSTEM, PHASE_1_USER
+    from ..llm.prompts import build_phase_1_messages
     from ..llm.validators import _try_parse_json, validate_phase_1
 
     llm = HippoLLM(config)
@@ -90,7 +90,8 @@ async def phase_1_impl(
             )
         lang = file_sigs.lang if file_sigs else "unknown"
 
-        user_msg = PHASE_1_USER.format(
+        messages = build_phase_1_messages(
+            project_root=target,
             file_path=fpath,
             lang=lang,
             dir_tree=dir_tree[:4000],
@@ -100,10 +101,6 @@ async def phase_1_impl(
             sig_count=sig_count,
             tag_vocab=vocab.format_for_prompt(),
         )
-        messages = [
-            {"role": "system", "content": PHASE_1_SYSTEM},
-            {"role": "user", "content": user_msg},
-        ]
 
         def validator(text: str) -> list[str]:
             return validate_phase_1(text, sig_count, vocab=vocab)

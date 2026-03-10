@@ -22,6 +22,7 @@ from .api_support import (
 from .config import default_config_yaml, load_config
 from .constants import CONFIG_FILE, HIPPO_DIR, QUERIES_DIR, VENDOR_QUERIES_REL
 from .nav import navigate as navigate_codebase
+from .resources import copy_packaged_queries
 from .tools.index_gen import run_index_pipeline
 from .tools.sig_extract import run_sig_extract
 from .tools.structure_prompt import run_structure_prompt
@@ -56,6 +57,8 @@ def initialize_project(target: str | Path = ".") -> Path:
             dst = queries_dir / scm.name
             if not dst.exists():
                 shutil.copy2(scm, dst)
+    else:
+        copy_packaged_queries(queries_dir)
     return output_dir
 
 
@@ -77,7 +80,7 @@ def build_tree_diff(target: str | Path = ".", *, verbose: bool = False):
 def build_index(target: str | Path = ".", *, verbose: bool = False, no_llm: bool = False) -> dict[str, Any]:
     project_root, output_dir = _resolve_target(target)
     config_path = output_dir / CONFIG_FILE
-    config = load_config(config_path if config_path.exists() else None)
+    config = load_config(config_path if config_path.exists() else None, project_root=project_root)
     return asyncio.run(
         run_index_pipeline(project_root, output_dir, config, verbose=verbose, no_llm=no_llm)
     )
@@ -92,7 +95,7 @@ def generate_structure_prompt(
 ) -> str:
     _, output_dir = _resolve_target(target)
     config_path = output_dir / CONFIG_FILE
-    config = load_config(config_path if config_path.exists() else None)
+    config = load_config(config_path if config_path.exists() else None, project_root=Path(target).resolve())
     return run_structure_prompt(
         output_dir,
         max_tokens=max_tokens,

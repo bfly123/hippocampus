@@ -8,6 +8,11 @@ from typing import Optional
 
 from ..config import HippoConfig
 from ..llm.client import HippoLLM
+from ..llm.prompts import (
+    build_architect_audit_messages,
+    build_architect_plan_messages,
+    build_architect_review_messages,
+)
 from .architect_models import RuleFinding
 from .architect_runtime_helpers import run_git_capture
 
@@ -61,6 +66,7 @@ class LLMAnalyzer:
 
     async def audit(self, index: dict, findings: list[RuleFinding]) -> dict:
         summary = self._summarize_index(index)
+        project_root = Path(self.llm.config.target).resolve()
         findings_text = (
             "\n".join(
                 f"- [{f.severity.value}] {f.rule_id}: {f.message}"
@@ -69,35 +75,13 @@ class LLMAnalyzer:
             or "No rule violations found."
         )
 
-        prompt = f"""You are a senior software architect performing a health audit.
-
-## Architecture Data
-{summary}
-
-## Rule Engine Findings
-{findings_text}
-
-## Analysis Framework
-Apply these principles:
-1. **Stable Dependencies Principle (SDP)**: Dependencies should flow toward stability.
-   Evaluate whether dependency directions are reasonable.
-2. **C4 Model**: Assess health at Component (module) and Code (class/function) levels.
-
-## Output
-Return valid JSON only:
-{{
-    "health_score": <0-100>,
-    "summary": "<2-3 sentence overall assessment>",
-    "root_causes": ["<root cause 1>", ...],
-    "recommendations": [
-        {{"priority": "high"|"medium"|"low", "action": "<specific action>"}}
-    ],
-    "sdp_assessment": "<1-2 sentences on dependency direction health>"
-}}"""
-
         response = await self.llm.call(
             phase="architect",
-            messages=[{"role": "user", "content": prompt}],
+            messages=build_architect_audit_messages(
+                project_root=project_root,
+                summary=summary,
+                findings_text=findings_text,
+            ),
         )
         return self._parse_json_response(response)
 
@@ -109,6 +93,7 @@ Return valid JSON only:
         repo_root: Optional[Path] = None,
     ) -> dict:
         summary = self._summarize_index(index)
+        project_root = repo_root.resolve() if repo_root is not None else Path(self.llm.config.target).resolve()
         findings_text = (
             "\n".join(
                 f"- [{f.severity.value}] {f.rule_id}: {f.message}"
@@ -137,93 +122,28 @@ Return valid JSON only:
         if len(content_diff) > 12000:
             content_diff = content_diff[:12000] + "\n... (truncated)"
 
-        prompt = f"""You are a senior software architect reviewing recent commits.
-
-## Architecture Data
-{summary}
-
-## Rule Engine Findings (current state)
-{findings_text}
-
-## Recent Commits
-```
-{git_log}
-```
-
-## Change Stats
-```
-{git_diff}
-```
-
-## Diff Content
-```diff
-{content_diff}
-```
-
-## Task
-Evaluate the architectural impact of these commits. For each commit, assess:
-- Does it respect module boundaries?
-- Does it introduce new dependencies? Are they in the right direction?
-- Does it increase or decrease architectural debt?
-
-## Output
-Return valid JSON only:
-{{
-    "summary": "<overall assessment>",
-    "commit_assessments": [
-        {{
-            "commit": "<hash + message>",
-            "impact": "positive"|"neutral"|"negative",
-            "notes": "<brief explanation>"
-        }}
-    ],
-    "new_risks": ["<risk if any>"],
-    "overall_trend": "improving"|"stable"|"degrading"
-}}"""
-
         response = await self.llm.call(
             phase="architect",
-            messages=[{"role": "user", "content": prompt}],
+            messages=build_architect_review_messages(
+                project_root=project_root,
+                summary=summary,
+                findings_text=findings_text,
+                git_log=git_log,
+                git_diff=git_diff,
+                content_diff=content_diff,
+            ),
         )
         return self._parse_json_response(response)
 
     async def plan_feature(self, index: dict, description: str) -> dict:
         summary = self._summarize_index(index)
-        prompt = f"""You are a senior software architect planning a new feature.
-
-## Architecture Data
-{summary}
-
-## Feature Description
-{description}
-
-## Task
-Determine the best placement for this feature within the existing architecture.
-Consider module boundaries, dependency directions, and the Stable Dependencies Principle.
-
-## Output
-Return valid JSON only:
-{{
-    "target_module": "<existing module ID or 'new:suggested-name'>",
-    "rationale": "<why this module>",
-    "files_to_create": [
-        {{"path": "<file path>", "purpose": "<what it does>"}}
-    ],
-    "files_to_modify": [
-        {{"path": "<file path>", "changes": "<what to change>"}}
-    ],
-    "new_dependencies": [
-        {{"from": "<module>", "to": "<module>", "reason": "<why>"}}
-    ],
-    "risks": ["<risk 1>", ...],
-    "impact_blast_radius": ["<existing file that will be affected>", ...],
-    "integration_seams": [
-        {{"file": "<file path>", "function": "<function name>", "action": "<how to integrate>"}}
-    ]
-}}"""
-
+        project_root = Path(self.llm.config.target).resolve()
         response = await self.llm.call(
             phase="architect",
-            messages=[{"role": "user", "content": prompt}],
+            messages=build_architect_plan_messages(
+                project_root=project_root,
+                summary=summary,
+                description=description,
+            ),
         )
         return self._parse_json_response(response)

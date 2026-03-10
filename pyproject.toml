@@ -6,12 +6,12 @@ build-backend = "setuptools.build_meta"
 name = "hippocampus"
 version = "0.1.0"
 description = "Code repository indexing and analysis toolkit"
+readme = "README.md"
 requires-python = ">=3.10"
 dependencies = [
     "click>=8.0",
     "pyyaml>=6.0",
     "pydantic>=2.0",
-    "litellm>=1.0",
     "tree-sitter>=0.25.2",
     "networkx>=3.0",
     "grep-ast>=0.3.0",
@@ -33,3 +33,6 @@ hippo = "hippocampus.cli:cli"
 
 [tool.setuptools.packages.find]
 where = ["src"]
+
+[tool.setuptools.package-data]
+"hippocampus" = ["resources/queries/*.scm", "resources/prompts/*.md"]

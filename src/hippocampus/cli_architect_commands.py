@@ -18,7 +18,7 @@ def _resolve_out_and_config(ctx, target: str):
     tgt = Path(target).resolve()
     out = tgt / HIPPO_DIR
     cfg_path = Path(ctx.obj["config_path"]) if ctx.obj["config_path"] else out / CONFIG_FILE
-    cfg = load_config(cfg_path if cfg_path.exists() else None)
+    cfg = load_config(cfg_path if cfg_path.exists() else None, project_root=tgt)
     return out, cfg
 
 

@@ -109,11 +109,12 @@ async def phase2_full(
 ) -> tuple[list[dict], dict[str, str]]:
     """Run full Phase 2a + 2b LLM calls."""
     from ..llm.client import HippoLLM
-    from ..llm.prompts import PHASE_2A_SYSTEM, PHASE_2A_USER
+    from ..llm.prompts import build_phase_2a_messages
     from ..llm.validators import _try_parse_json, validate_phase_2a
 
     del verbose
     llm = HippoLLM(config)
+    project_root = Path(config.target).resolve()
 
     summaries = []
     for fp, data in phase1_results.items():
@@ -122,10 +123,10 @@ async def phase2_full(
         summaries.append(f"{fp}: {desc} [{', '.join(tags)}]")
     file_summaries = "\n".join(summaries)
 
-    msg_2a = [
-        {"role": "system", "content": PHASE_2A_SYSTEM},
-        {"role": "user", "content": PHASE_2A_USER.format(file_summaries=file_summaries[:40000])},
-    ]
+    msg_2a = build_phase_2a_messages(
+        project_root=project_root,
+        file_summaries=file_summaries[:40000],
+    )
     text_2a, _ = await llm.call_with_retry("phase_2a", msg_2a, validate_phase_2a)
     modules_data, _ = _try_parse_json(text_2a)
     modules = modules_data.get("modules", []) if modules_data else []
@@ -149,11 +150,12 @@ async def phase2_assign_files(
 ) -> dict[str, str]:
     """Run Phase 2b: assign a set of files to modules via LLM."""
     from ..llm.client import HippoLLM
-    from ..llm.prompts import PHASE_2B_SYSTEM, PHASE_2B_USER
+    from ..llm.prompts import build_phase_2b_messages
     from ..llm.validators import _try_parse_json, validate_phase_2b
 
     del verbose
     llm = HippoLLM(config)
+    project_root = Path(config.target).resolve()
     valid_ids = {m["id"] for m in modules}
     module_vocab = "\n".join(f"- {m['id']}: {m.get('desc', '')}" for m in modules)
 
@@ -166,17 +168,12 @@ async def phase2_assign_files(
     file_summaries = "\n".join(summaries)
     file_count = len(files_to_assign)
 
-    msg_2b = [
-        {"role": "system", "content": PHASE_2B_SYSTEM},
-        {
-            "role": "user",
-            "content": PHASE_2B_USER.format(
-                module_vocab=module_vocab,
-                file_summaries=file_summaries[:40000],
-                file_count=file_count,
-            ),
-        },
-    ]
+    msg_2b = build_phase_2b_messages(
+        project_root=project_root,
+        module_vocab=module_vocab,
+        file_summaries=file_summaries[:40000],
+        file_count=file_count,
+    )
 
     def validator_2b(text):
         return validate_phase_2b(text, file_count, valid_ids)

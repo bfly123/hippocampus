@@ -12,9 +12,11 @@ async def phase3a_enrich_module_impl(
     mod: dict,
     mod_files: list[str],
     phase1_results: dict[str, dict],
+    *,
+    project_root: Path | None = None,
 ) -> dict:
     """Run Phase 3a LLM call for a single module."""
-    from ..llm.prompts import PHASE_3A_SYSTEM, PHASE_3A_USER
+    from ..llm.prompts import build_phase_3a_messages
     from ..llm.validators import _try_parse_json, validate_phase_3a
 
     mid = mod["id"]
@@ -26,17 +28,12 @@ async def phase3a_enrich_module_impl(
         file_lines.append(f"  {fp}: {desc}")
     module_files_text = "\n".join(file_lines)
 
-    msg_3a = [
-        {"role": "system", "content": PHASE_3A_SYSTEM},
-        {
-            "role": "user",
-            "content": PHASE_3A_USER.format(
-                module_id=mid,
-                module_desc=mod.get("desc", ""),
-                module_files=module_files_text[:3000],
-            ),
-        },
-    ]
+    msg_3a = build_phase_3a_messages(
+        project_root=project_root,
+        module_id=mid,
+        module_desc=mod.get("desc", ""),
+        module_files=module_files_text[:3000],
+    )
 
     def validator_3a(text):
         return validate_phase_3a(text, valid_files)
@@ -88,7 +85,7 @@ async def build_project_overview_impl(
     target: Path,
 ) -> dict:
     """Run Phase 3b LLM call for project overview."""
-    from ..llm.prompts import PHASE_3B_SYSTEM, PHASE_3B_USER
+    from ..llm.prompts import build_phase_3b_messages
     from ..llm.validators import _try_parse_json, validate_phase_3b
 
     module_summaries = "\n".join(
@@ -97,19 +94,14 @@ async def build_project_overview_impl(
     readme_excerpt = read_readme_excerpt(target)
     primary_lang = infer_primary_lang_from_phase1(phase1_results)
 
-    msg_3b = [
-        {"role": "system", "content": PHASE_3B_SYSTEM},
-        {
-            "role": "user",
-            "content": PHASE_3B_USER.format(
-                module_summaries=module_summaries[:4000],
-                readme_excerpt=readme_excerpt,
-                file_count=len(phase1_results),
-                module_count=len(enriched_modules),
-                primary_lang=primary_lang,
-            ),
-        },
-    ]
+    msg_3b = build_phase_3b_messages(
+        project_root=target,
+        module_summaries=module_summaries[:4000],
+        readme_excerpt=readme_excerpt,
+        file_count=len(phase1_results),
+        module_count=len(enriched_modules),
+        primary_lang=primary_lang,
+    )
 
     text_3b, _ = await llm.call_with_retry("phase_3b", msg_3b, validate_phase_3b)
     project_data, _ = _try_parse_json(text_3b)

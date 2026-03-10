@@ -44,7 +44,7 @@ from .index_gen_dependencies import (
     resolve_relative_import as _resolve_relative_import_impl,
 )
 from .index_gen_runtime import (
-    cleanup_litellm as _cleanup_litellm_impl,
+    cleanup_llm_clients as _cleanup_llm_clients_impl,
     run_index_pipeline_impl as _run_index_pipeline_impl,
 )
 
@@ -157,15 +157,6 @@ async def phase_3(
     Returns (enriched_modules, project_node).
     """
     from ..llm.client import HippoLLM
-    from ..llm.prompts import (
-        PHASE_3A_SYSTEM, PHASE_3A_USER,
-        PHASE_3B_SYSTEM, PHASE_3B_USER,
-    )
-    from ..llm.validators import (
-        validate_phase_3a, validate_phase_3b,
-        _try_parse_json,
-    )
-
     llm_3 = HippoLLM(config)
 
     # Load cache
@@ -275,7 +266,14 @@ async def _phase3a_enrich_module(
     mod_files: list[str],
     phase1_results: dict[str, dict],
 ) -> dict:
-    return await _phase3a_enrich_module_impl(llm, mod, mod_files, phase1_results)
+    project_root = Path(llm.config.target).resolve() if hasattr(llm, "config") else None
+    return await _phase3a_enrich_module_impl(
+        llm,
+        mod,
+        mod_files,
+        phase1_results,
+        project_root=project_root,
+    )
 
 
 def _resolve_import_to_file(
@@ -341,8 +339,8 @@ def phase_4_merge(
     )
 
 
-async def _cleanup_litellm():
-    await _cleanup_litellm_impl()
+async def _cleanup_llm_clients():
+    await _cleanup_llm_clients_impl()
 
 
 async def run_index_pipeline(
@@ -364,6 +362,6 @@ async def run_index_pipeline(
         phase_2_fn=phase_2,
         phase_3_fn=phase_3,
         phase_4_merge_fn=phase_4_merge,
-        cleanup_fn=_cleanup_litellm,
+        cleanup_fn=_cleanup_llm_clients,
         config=config,
     )

@@ -51,7 +51,81 @@ class TestLoadConfig:
         cfg = load_config(tmp_path / "nonexistent.yaml")
         assert isinstance(cfg, HippoConfig)
 
-    def test_auto_bind_from_gateway_monorepo_layout(self, tmp_path: Path):
+    def test_load_from_user_global_llm_config(self, tmp_path: Path, monkeypatch):
+        user_dir = tmp_path / "user"
+        monkeypatch.setenv("HIPPOCAMPUS_USER_CONFIG_DIR", str(user_dir))
+        (user_dir / "hippocampus-llm.yaml").parent.mkdir(parents=True)
+        (user_dir / "hippocampus-llm.yaml").write_text(
+            yaml.dump(
+                {
+                    "llm": {
+                        "base_url": "https://backend.example/v1",
+                        "api_key": "global-key",
+                        "fallback_model": "openai/gpt-4o-mini",
+                    }
+                }
+            ),
+            encoding="utf-8",
+        )
+
+        cfg = load_config(None, project_root=tmp_path / "project")
+        assert cfg.llm.base_url == "https://backend.example/v1"
+        assert cfg.llm.api_key == "global-key"
+        assert cfg.llm.fallback_model == "openai/gpt-4o-mini"
+
+    def test_project_config_overrides_user_global_llm(self, tmp_path: Path, monkeypatch):
+        project = tmp_path / "project"
+        project.mkdir()
+        user_dir = tmp_path / "user"
+        monkeypatch.setenv("HIPPOCAMPUS_USER_CONFIG_DIR", str(user_dir))
+        (user_dir / "hippocampus-llm.yaml").parent.mkdir(parents=True)
+        (user_dir / "hippocampus-llm.yaml").write_text(
+            yaml.dump({"llm": {"base_url": "https://global.example/v1", "api_key": "global-key"}}),
+            encoding="utf-8",
+        )
+
+        cfg_file = project / ".hippocampus" / "config.yaml"
+        cfg_file.parent.mkdir()
+        cfg_file.write_text(
+            yaml.dump({"llm": {"base_url": "https://project.example/v1", "api_key": "project-key"}}),
+            encoding="utf-8",
+        )
+
+        cfg = load_config(cfg_file, project_root=project)
+        assert cfg.llm.base_url == "https://project.example/v1"
+        assert cfg.llm.api_key == "project-key"
+
+    def test_load_from_architec_global_when_hippo_missing(self, tmp_path: Path, monkeypatch):
+        arch_dir = tmp_path / "arch-user"
+        monkeypatch.setenv("ARCHITEC_USER_CONFIG_DIR", str(arch_dir))
+        (arch_dir / "architec-llm.yaml").parent.mkdir(parents=True)
+        (arch_dir / "architec-llm.yaml").write_text(
+            yaml.dump(
+                {
+                    "providers": {
+                        "main": {
+                            "base_url": "https://arch.example/v1",
+                            "api_key": "arch-key",
+                        }
+                    },
+                    "tiers": {
+                        "strong": {"candidates": [{"provider": "main", "model": "gpt-5.3-codex high"}]},
+                        "small": {"candidates": [{"provider": "main", "model": "gpt-5.3-codex-medium"}]},
+                    },
+                }
+            ),
+            encoding="utf-8",
+        )
+
+        cfg = load_config(None, project_root=tmp_path / "project")
+        assert cfg.llm.base_url == "https://arch.example/v1"
+        assert cfg.llm.api_key == "arch-key"
+        assert cfg.llm.phase_models.phase_1 == "gpt-5.3-codex-medium"
+        assert cfg.llm.phase_models.architect == "gpt-5.3-codex high"
+
+    def test_auto_bind_from_gateway_monorepo_layout(self, tmp_path: Path, monkeypatch):
+        monkeypatch.setenv("HIPPOCAMPUS_USER_CONFIG_DIR", str(tmp_path / "hippo-user"))
+        monkeypatch.setenv("ARCHITEC_USER_CONFIG_DIR", str(tmp_path / "arch-user"))
         project = tmp_path / "inner"
         project.mkdir()
         cfg_file = project / ".hippocampus" / "config.yaml"
@@ -94,7 +168,9 @@ class TestLoadConfig:
         assert cfg.llm.phase_models.phase_1 == "gpt-backend-analyst"
         assert cfg.llm.phase_models.phase_3a == "gpt-backend-merger"
 
-    def test_explicit_llm_route_not_overridden(self, tmp_path: Path):
+    def test_explicit_llm_route_not_overridden(self, tmp_path: Path, monkeypatch):
+        monkeypatch.setenv("HIPPOCAMPUS_USER_CONFIG_DIR", str(tmp_path / "hippo-user"))
+        monkeypatch.setenv("ARCHITEC_USER_CONFIG_DIR", str(tmp_path / "arch-user"))
         project = tmp_path / "inner"
         project.mkdir()
         cfg_file = project / ".hippocampus" / "config.yaml"

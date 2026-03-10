@@ -4,21 +4,15 @@ from pathlib import Path
 from typing import Any, Awaitable, Callable
 
 from ..constants import INDEX_FILE, TREE_FILE
+from ..llm.transport import close_http_clients
 from ..types import TreeNode
 from ..utils import read_json, write_json
 
 
-async def cleanup_litellm() -> None:
-    """Close litellm async clients to prevent SSL errors on shutdown."""
+async def cleanup_llm_clients() -> None:
+    """Close shared HTTP clients used by hippo LLM transport."""
     try:
-        import litellm
-
-        aclient = getattr(litellm, "module_level_aclient", None)
-        if aclient and hasattr(aclient, "client"):
-            await aclient.client.aclose()
-        session = getattr(litellm, "aclient_session", None)
-        if session and not session.closed:
-            await session.close()
+        await close_http_clients()
     except Exception:
         pass
 

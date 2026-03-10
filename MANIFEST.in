@@ -1,0 +1,3 @@
+include README.md
+recursive-include src/hippocampus/resources/queries *.scm
+recursive-include src/hippocampus/resources/prompts *.md

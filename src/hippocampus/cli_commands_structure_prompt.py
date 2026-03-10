@@ -39,7 +39,7 @@ def register_structure_prompt_commands(cli) -> dict[str, object]:
         tgt = Path(target).resolve()
         out = tgt / HIPPO_DIR
         cfg_path = Path(ctx.obj["config_path"]) if ctx.obj["config_path"] else out / CONFIG_FILE
-        cfg = load_config(cfg_path if cfg_path.exists() else None)
+        cfg = load_config(cfg_path if cfg_path.exists() else None, project_root=tgt)
 
         if profile is None:
             raw_profile = str(getattr(cfg, "structure_prompt_profile", "auto")).strip().lower()
@@ -107,7 +107,7 @@ def register_structure_prompt_commands(cli) -> dict[str, object]:
         tgt = Path(target).resolve()
         out = tgt / HIPPO_DIR
         cfg_path = Path(ctx.obj["config_path"]) if ctx.obj["config_path"] else out / CONFIG_FILE
-        cfg = load_config(cfg_path if cfg_path.exists() else None)
+        cfg = load_config(cfg_path if cfg_path.exists() else None, project_root=tgt)
 
         if map_tokens is None:
             map_tokens = max(1, cfg.structure_prompt_map_tokens)

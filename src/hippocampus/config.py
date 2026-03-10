@@ -14,6 +14,9 @@ from .constants import (
     DEFAULT_RETRY_MAX,
     DEFAULT_TIMEOUT,
 )
+from .architec_llm_compat import load_architec_llm_as_hippo, resolve_architec_llm_config_file
+from .resource_paths import resolve_hippo_llm_config_file
+from .user_llm_config import load_user_llm_config
 
 
 class LLMPhaseModels(BaseModel):
@@ -42,10 +45,13 @@ class LLMConfig(BaseModel):
     temperature: LLMTemperature = Field(default_factory=LLMTemperature)
     fallback_model: str = "anthropic/claude-haiku-4-5-20251001"
     litellm_provider: Optional[str] = None
+    provider_type: Optional[str] = None
+    api_style: Optional[str] = None
     base_url: Optional[str] = None
     api_base: Optional[str] = None
     api_key: Optional[str] = None
     extra_headers: dict[str, str] = Field(default_factory=dict)
+    model_map: dict[str, str] = Field(default_factory=dict)
     auto_from_llm_gateway: bool = True
     gateway_config_path: Optional[str] = None
     use_backend_task_models: bool = True
@@ -81,6 +87,47 @@ def _normalize_str_dict(value: Any) -> dict[str, str]:
         if kk and vv:
             out[kk] = vv
     return out
+
+
+def _load_yaml_dict(path: Path) -> dict[str, Any]:
+    try:
+        loaded = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
+    except Exception:
+        return {}
+    return loaded if isinstance(loaded, dict) else {}
+
+
+def _merge_dicts(base: dict[str, Any], override: dict[str, Any]) -> dict[str, Any]:
+    merged: dict[str, Any] = dict(base)
+    for key, value in override.items():
+        if isinstance(value, dict) and isinstance(merged.get(key), dict):
+            merged[key] = _merge_dicts(merged[key], value)
+            continue
+        merged[key] = value
+    return merged
+
+
+def _infer_project_root(config_path: Optional[Path], project_root: Optional[Path]) -> Path | None:
+    if project_root is not None:
+        return project_root.resolve()
+    if config_path is None:
+        return None
+    resolved = config_path.resolve()
+    if resolved.name == "config.yaml" and resolved.parent.name == ".hippocampus":
+        return resolved.parent.parent
+    return resolved.parent
+
+
+def _merge_user_llm_config(raw: dict[str, Any], config_path: Optional[Path], project_root: Optional[Path]) -> dict[str, Any]:
+    root = _infer_project_root(config_path, project_root)
+    llm_cfg_path = resolve_hippo_llm_config_file(root)
+    user_raw = load_user_llm_config(llm_cfg_path)
+    if user_raw:
+        return _merge_dicts(user_raw, raw)
+    architec_cfg = load_architec_llm_as_hippo(resolve_architec_llm_config_file(root))
+    if architec_cfg:
+        return _merge_dicts(architec_cfg, raw)
+    return raw
 
 
 def _discover_gateway_config(start: Path, explicit_path: str | None) -> Path | None:
@@ -134,6 +181,9 @@ def _load_gateway_backend_profile(path: Path) -> dict[str, Any] | None:
         "base_url": _normalize_str(provider_cfg.get("base_url")),
         "api_key": _normalize_str(provider_cfg.get("api_key")),
         "extra_headers": _normalize_str_dict(provider_cfg.get("headers")),
+        "provider_type": _normalize_str(provider_cfg.get("provider_type")),
+        "api_style": _normalize_str(provider_cfg.get("api_style")),
+        "model_map": _normalize_str_dict(provider_cfg.get("model_map")),
         "model": _normalize_str(backend_llm.get("model")),
         "task_models": _normalize_str_dict(backend_llm.get("task_models")),
     }
@@ -184,6 +234,15 @@ def _apply_gateway_llm_defaults(cfg: HippoConfig, raw: dict[str, Any], cfg_path:
         headers = profile.get("extra_headers", {})
         if headers:
             cfg.llm.extra_headers = headers
+        provider_type = _normalize_str(profile.get("provider_type"))
+        if provider_type:
+            cfg.llm.provider_type = provider_type
+        api_style = _normalize_str(profile.get("api_style"))
+        if api_style:
+            cfg.llm.api_style = api_style
+        model_map = profile.get("model_map", {})
+        if isinstance(model_map, dict) and model_map:
+            cfg.llm.model_map = _normalize_str_dict(model_map)
         if not cfg.llm.litellm_provider:
             # Heuristic provider inference for non-prefixed models.
             model_probe = _normalize_str(profile.get("model")).lower()
@@ -220,15 +279,21 @@ def _apply_gateway_llm_defaults(cfg: HippoConfig, raw: dict[str, Any], cfg_path:
     cfg.llm.phase_models.architect = default
 
 
-def load_config(config_path: Optional[Path] = None) -> HippoConfig:
+def load_config(config_path: Optional[Path] = None, *, project_root: Optional[Path] = None) -> HippoConfig:
     """Load config from YAML file, falling back to defaults."""
     if config_path and config_path.exists():
-        with open(config_path, encoding="utf-8") as f:
-            raw = yaml.safe_load(f) or {}
+        raw = _load_yaml_dict(config_path)
+        raw = _merge_user_llm_config(raw, config_path, project_root)
         if "structure_prompt_max_tokens" not in raw and "structure_prompt_max_chars" in raw:
             raw["structure_prompt_max_tokens"] = raw["structure_prompt_max_chars"]
         cfg = HippoConfig(**raw)
         _apply_gateway_llm_defaults(cfg, raw, config_path)
+        return cfg
+    raw = _merge_user_llm_config({}, config_path, project_root)
+    if raw:
+        cfg = HippoConfig(**raw)
+        if project_root is not None:
+            _apply_gateway_llm_defaults(cfg, raw, project_root / ".hippocampus" / "config.yaml")
         return cfg
     return HippoConfig()
 

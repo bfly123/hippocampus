@@ -7,6 +7,7 @@ import click
 
 from .config import default_config_yaml, load_config
 from .constants import CONFIG_FILE, HIPPO_DIR, QUERIES_DIR, VENDOR_QUERIES_REL
+from .resources import copy_packaged_queries
 
 
 def _resolve_paths(config_path, output_dir, target):
@@ -16,7 +17,8 @@ def _resolve_paths(config_path, output_dir, target):
     else:
         cfg_path = Path(HIPPO_DIR) / CONFIG_FILE
 
-    cfg = load_config(cfg_path if cfg_path.exists() else None)
+    tgt_hint = Path(target).resolve() if target else None
+    cfg = load_config(cfg_path if cfg_path.exists() else None, project_root=tgt_hint)
 
     if output_dir:
         out = Path(output_dir)
@@ -67,7 +69,11 @@ def register_project_bootstrap_commands(cli) -> dict[str, object]:
                     copied += 1
             click.echo(f"Copied {copied} query files to {queries_dst}")
         else:
-            click.echo("Warning: vendor query files not found, skipping .scm copy.")
+            copied = copy_packaged_queries(queries_dst)
+            if copied:
+                click.echo(f"Copied {copied} packaged query files to {queries_dst}")
+            else:
+                click.echo("Warning: query files not found, skipping .scm copy.")
 
         click.echo(f"Initialized {hippo_dir}")
 

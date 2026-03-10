@@ -1,6 +1,4 @@
 llm:
-  api_base: https://open.bigmodel.cn/api/paas/v4
-  api_key: fc08afeb3e7c49e49e64f937bf0d204b.g7adqeDVByxEsV36
   fallback_model: openai/glm-4-flash
   max_concurrent: 1
   phase_models:
