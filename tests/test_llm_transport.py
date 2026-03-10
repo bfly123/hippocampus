@@ -1,6 +1,9 @@
 from __future__ import annotations
 
+import pytest
+
 from hippocampus.config import HippoConfig
+from hippocampus.llm.client import HippoLLM
 from hippocampus.llm.runtime import (
     llm_provider,
     normalize_model_name,
@@ -79,3 +82,11 @@ def test_openai_responses_payload_uses_instructions():
     assert payload["model"] == "gpt-5.3-codex high"
     assert payload["instructions"] == "system prompt"
     assert payload["input"][0]["role"] == "user"
+
+
+@pytest.mark.asyncio
+async def test_llm_call_raises_when_base_url_missing():
+    cfg = HippoConfig()
+    llm = HippoLLM(cfg)
+    with pytest.raises(RuntimeError, match="base_url is not configured"):
+        await llm.call("phase_1", [{"role": "user", "content": "x"}])

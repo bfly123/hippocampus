@@ -107,6 +107,42 @@ def _merge_dicts(base: dict[str, Any], override: dict[str, Any]) -> dict[str, An
     return merged
 
 
+def _is_empty_config_value(value: Any) -> bool:
+    if value is None:
+        return True
+    if isinstance(value, str):
+        return not value.strip()
+    if isinstance(value, (dict, list, tuple, set)):
+        return not value
+    return False
+
+
+def _merge_dicts_skipping_empty_defaults(
+    base: dict[str, Any],
+    override: dict[str, Any],
+    *,
+    defaults: dict[str, Any],
+) -> dict[str, Any]:
+    merged: dict[str, Any] = dict(base)
+    for key, value in override.items():
+        default_value = defaults.get(key)
+        current_value = merged.get(key)
+        if isinstance(value, dict) and isinstance(current_value, dict):
+            child_defaults = default_value if isinstance(default_value, dict) else {}
+            merged[key] = _merge_dicts_skipping_empty_defaults(
+                current_value,
+                value,
+                defaults=child_defaults,
+            )
+            continue
+        if _is_empty_config_value(value):
+            continue
+        if default_value is not None and value == default_value:
+            continue
+        merged[key] = value
+    return merged
+
+
 def _infer_project_root(config_path: Optional[Path], project_root: Optional[Path]) -> Path | None:
     if project_root is not None:
         return project_root.resolve()
@@ -122,12 +158,22 @@ def _merge_user_llm_config(raw: dict[str, Any], config_path: Optional[Path], pro
     root = _infer_project_root(config_path, project_root)
     llm_cfg_path = resolve_hippo_llm_config_file(root)
     user_raw = load_user_llm_config(llm_cfg_path)
-    if user_raw:
-        return _merge_dicts(user_raw, raw)
-    architec_cfg = load_architec_llm_as_hippo(resolve_architec_llm_config_file(root))
-    if architec_cfg:
-        return _merge_dicts(architec_cfg, raw)
-    return raw
+    base_raw = user_raw
+    if not base_raw:
+        base_raw = load_architec_llm_as_hippo(resolve_architec_llm_config_file(root))
+    if not base_raw:
+        return raw
+
+    merged = _merge_dicts(base_raw, raw)
+    base_llm = base_raw.get("llm", {}) if isinstance(base_raw.get("llm"), dict) else {}
+    raw_llm = raw.get("llm", {}) if isinstance(raw.get("llm"), dict) else {}
+    if base_llm and raw_llm:
+        merged["llm"] = _merge_dicts_skipping_empty_defaults(
+            base_llm,
+            raw_llm,
+            defaults=LLMConfig().model_dump(),
+        )
+    return merged
 
 
 def _discover_gateway_config(start: Path, explicit_path: str | None) -> Path | None:

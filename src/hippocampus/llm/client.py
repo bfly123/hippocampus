@@ -35,6 +35,14 @@ class HippoLLM:
         temps = self.config.llm.temperature
         return getattr(temps, phase, 0.0)
 
+    def _validate_provider(self, provider: dict[str, object]) -> None:
+        base_url = str(provider.get("base_url", "") or "").strip()
+        if not base_url:
+            raise RuntimeError(
+                "LLM base_url is not configured. "
+                "Check ~/.hippocampus/hippocampus-llm.yaml or ~/.architec/architec-llm.yaml."
+            )
+
     async def _complete_once(
         self,
         *,
@@ -83,18 +91,25 @@ class HippoLLM:
     async def call(self, phase: str, messages: list[dict[str, str]]) -> str:
         model = self._get_model(phase)
         provider = llm_provider(self.config)
+        self._validate_provider(provider)
         normalized_model = normalize_model_name(provider, model)
         temperature = resolve_temperature(normalized_model, self._get_temperature(phase))
 
         async with self._semaphore:
             for attempt in range(5):
                 try:
-                    return await self._complete_once(
+                    text = await self._complete_once(
                         provider=provider,
                         model=normalized_model,
                         messages=messages,
                         timeout=float(self.config.llm.timeout),
                         temperature=temperature,
+                    )
+                    if text.strip():
+                        return text
+                    raise RuntimeError(
+                        "LLM response text was empty. "
+                        "Check provider api_style/response format."
                     )
                 except Exception:
                     if attempt == 4:

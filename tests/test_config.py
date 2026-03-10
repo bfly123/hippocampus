@@ -123,6 +123,46 @@ class TestLoadConfig:
         assert cfg.llm.phase_models.phase_1 == "gpt-5.3-codex-medium"
         assert cfg.llm.phase_models.architect == "gpt-5.3-codex high"
 
+    def test_project_default_llm_values_do_not_override_architec(self, tmp_path: Path, monkeypatch):
+        arch_dir = tmp_path / "arch-user"
+        monkeypatch.setenv("ARCHITEC_USER_CONFIG_DIR", str(arch_dir))
+        project = tmp_path / "project"
+        project.mkdir()
+        (arch_dir / "architec-llm.yaml").parent.mkdir(parents=True)
+        (arch_dir / "architec-llm.yaml").write_text(
+            yaml.dump(
+                {
+                    "providers": {
+                        "main": {
+                            "provider_type": "glm",
+                            "api_style": "openai_responses",
+                            "base_url": "https://arch.example/v1",
+                            "api_key": "arch-key",
+                            "headers": {"x-test": "1"},
+                        }
+                    },
+                    "tiers": {
+                        "strong": {"candidates": [{"provider": "main", "model": "gpt-5.3-codex high"}]},
+                        "small": {"candidates": [{"provider": "main", "model": "gpt-5.3-codex-medium"}]},
+                    },
+                }
+            ),
+            encoding="utf-8",
+        )
+
+        cfg_file = project / ".hippocampus" / "config.yaml"
+        cfg_file.parent.mkdir()
+        cfg_file.write_text(default_config_yaml(), encoding="utf-8")
+
+        cfg = load_config(cfg_file, project_root=project)
+        assert cfg.llm.base_url == "https://arch.example/v1"
+        assert cfg.llm.api_key == "arch-key"
+        assert cfg.llm.provider_type == "glm"
+        assert cfg.llm.api_style == "openai_responses"
+        assert cfg.llm.extra_headers == {"x-test": "1"}
+        assert cfg.llm.phase_models.phase_1 == "gpt-5.3-codex-medium"
+        assert cfg.llm.phase_models.architect == "gpt-5.3-codex high"
+
     def test_auto_bind_from_gateway_monorepo_layout(self, tmp_path: Path, monkeypatch):
         monkeypatch.setenv("HIPPOCAMPUS_USER_CONFIG_DIR", str(tmp_path / "hippo-user"))
         monkeypatch.setenv("ARCHITEC_USER_CONFIG_DIR", str(tmp_path / "arch-user"))
