@@ -7,6 +7,7 @@ from ..config import HippoConfig
 from ..constants import HIPPO_DIR
 from ..tag_vocab import TagVocab, is_valid_new_tag, load_vocab, save_vocab
 from ..utils import is_doc, is_hidden
+from .index_gen_reporting import format_failed_file_summary
 from .index_gen_phase1_runner import run_phase1_processors
 
 
@@ -131,7 +132,12 @@ async def phase_1_impl(
     save_vocab(output_dir, vocab)
 
     if verbose and failed:
-        print(f"Phase 1 failed files: {failed}")
+        print(
+            format_failed_file_summary(
+                failed,
+                total_processed=len(to_process),
+            )
+        )
 
     return results
 
