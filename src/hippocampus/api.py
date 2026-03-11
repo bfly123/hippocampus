@@ -19,7 +19,7 @@ from .api_support import (
     summarize_project_index,
     summarize_project_report,
 )
-from .config import default_config_yaml, load_config
+from .config import default_config_yaml, load_config, require_llm_configured
 from .constants import CONFIG_FILE, HIPPO_DIR, QUERIES_DIR, VENDOR_QUERIES_REL
 from .nav import navigate as navigate_codebase
 from .resources import copy_packaged_queries
@@ -81,8 +81,11 @@ def build_index(target: str | Path = ".", *, verbose: bool = False, no_llm: bool
     project_root, output_dir = _resolve_target(target)
     config_path = output_dir / CONFIG_FILE
     config = load_config(config_path if config_path.exists() else None, project_root=project_root)
+    if no_llm:
+        raise ValueError("hippocampus build_index requires LLM; no_llm mode is not supported")
+    require_llm_configured(config)
     return asyncio.run(
-        run_index_pipeline(project_root, output_dir, config, verbose=verbose, no_llm=no_llm)
+        run_index_pipeline(project_root, output_dir, config, verbose=verbose, no_llm=False)
     )
 
 

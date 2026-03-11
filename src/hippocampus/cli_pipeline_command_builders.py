@@ -7,15 +7,12 @@ from typing import Any
 import click
 
 from .cli_pipeline_helpers import build_ranked_tag_report, run_pipeline_steps
-from .config import load_config
+from .config import load_config, require_llm_configured
 from .constants import CONFIG_FILE, HIPPO_DIR
 
 
-def _echo_index_start(ctx: Any, *, no_llm: bool, phase_num: int | None) -> None:
+def _echo_index_start(ctx: Any, *, phase_num: int | None) -> None:
     if ctx.obj["quiet"]:
-        return
-    if no_llm:
-        click.echo("Running local-only index pipeline ...")
         return
     if phase_num is not None:
         click.echo(f"Running phase {phase_num} ...")
@@ -26,6 +23,13 @@ def _echo_index_start(ctx: Any, *, no_llm: bool, phase_num: int | None) -> None:
 def _load_index_config(ctx: Any, out: Path):
     cfg_path = Path(ctx.obj["config_path"]) if ctx.obj["config_path"] else out / CONFIG_FILE
     return load_config(cfg_path if cfg_path.exists() else None, project_root=out.parent)
+
+
+def _require_index_llm(cfg) -> None:
+    try:
+        require_llm_configured(cfg)
+    except RuntimeError as exc:
+        raise click.ClickException(str(exc)) from exc
 
 
 def build_repomap_command():
@@ -113,18 +117,9 @@ def build_index_command():
     @click.command("index")
     @click.option("--target", default=".", help="Project root directory.")
     @click.option("--phase", "phase_num", default=None, type=int, help="Run only this phase (0-4).")
-    @click.option(
-        "--no-llm",
-        is_flag=True,
-        help="Skip LLM phases; build a minimal index from local signals only.",
-    )
     @click.pass_context
-    def index(ctx, target, phase_num, no_llm):
+    def index(ctx, target, phase_num):
         """Generate unified index -> hippocampus-index.json."""
-        if no_llm and phase_num is not None:
-            click.echo("Error: --no-llm cannot be combined with --phase")
-            raise SystemExit(2)
-
         tgt = Path(target).resolve()
         out = tgt / HIPPO_DIR
         out.mkdir(parents=True, exist_ok=True)
@@ -133,7 +128,8 @@ def build_index_command():
         from .tools.snapshot import save_snapshot
 
         cfg = _load_index_config(ctx, out)
-        _echo_index_start(ctx, no_llm=no_llm, phase_num=phase_num)
+        _require_index_llm(cfg)
+        _echo_index_start(ctx, phase_num=phase_num)
 
         result = asyncio.run(
             run_index_pipeline(
@@ -142,7 +138,7 @@ def build_index_command():
                 cfg,
                 phase=phase_num,
                 verbose=ctx.obj["verbose"],
-                no_llm=no_llm,
+                no_llm=False,
             )
         )
         if result and not ctx.obj["quiet"]:
@@ -166,7 +162,6 @@ def build_index_command():
 def build_run_command(*, command_refs: dict[str, object], trim_cmd, index_cmd):
     @click.command("run")
     @click.option("--target", default=".", help="Project root directory.")
-    @click.option("--no-llm", is_flag=True, help="Skip LLM phases; index will be local-only.")
     @click.option(
         "--prompt-profile",
         type=click.Choice(["auto", "map", "deep"]),
@@ -175,8 +170,12 @@ def build_run_command(*, command_refs: dict[str, object], trim_cmd, index_cmd):
         help="Structure prompt profile for Step 7.",
     )
     @click.pass_context
-    def run(ctx, target, no_llm, prompt_profile):
+    def run(ctx, target, prompt_profile):
         """Run full pipeline: init -> sig-extract -> tree -> index -> structure prompt."""
+        tgt = Path(target).resolve()
+        out = tgt / HIPPO_DIR
+        out.mkdir(parents=True, exist_ok=True)
+        _require_index_llm(_load_index_config(ctx, out))
         run_pipeline_steps(
             ctx=ctx,
             quiet=ctx.obj["quiet"],
@@ -187,7 +186,7 @@ def build_run_command(*, command_refs: dict[str, object], trim_cmd, index_cmd):
                 ("Step 3: Tree", command_refs["tree"], {"target": target}),
                 ("Step 4: Tree Diff", command_refs["tree-diff"], {"target": target}),
                 ("Step 5: Trim", trim_cmd, {"target": target}),
-                ("Step 6: Index", index_cmd, {"target": target, "no_llm": no_llm}),
+                ("Step 6: Index", index_cmd, {"target": target}),
                 (
                     f"Step 7: Structure Prompt ({prompt_profile} profile)",
                     command_refs["structure-prompt"],

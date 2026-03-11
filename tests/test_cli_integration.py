@@ -41,6 +41,16 @@ class TestCliHelp:
         assert result.exit_code == 0
         assert "--budget" in result.output
 
+    def test_index_help_does_not_expose_no_llm(self, runner):
+        result = runner.invoke(cli, ["index", "--help"])
+        assert result.exit_code == 0
+        assert "--no-llm" not in result.output
+
+    def test_run_help_does_not_expose_no_llm(self, runner):
+        result = runner.invoke(cli, ["run", "--help"])
+        assert result.exit_code == 0
+        assert "--no-llm" not in result.output
+
     def test_hooks_help(self, runner):
         result = runner.invoke(cli, ["hooks", "--help"])
         assert result.exit_code == 0

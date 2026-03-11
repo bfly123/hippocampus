@@ -38,11 +38,11 @@ def test_core_commands_registered_from_core_module():
         assert cli.commands[name].callback.__module__ == EXPECTED_MODULES[name]
 
 
-def test_index_rejects_no_llm_with_phase(tmp_path):
+def test_index_rejects_no_llm_option(tmp_path):
     runner = CliRunner()
     result = runner.invoke(
         cli,
-        ["index", "--target", str(tmp_path), "--no-llm", "--phase", "1"],
+        ["index", "--target", str(tmp_path), "--no-llm"],
     )
     assert result.exit_code == 2
-    assert "--no-llm cannot be combined with --phase" in result.output
+    assert "No such option: --no-llm" in result.output

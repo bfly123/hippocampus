@@ -1,4 +1,5 @@
 from hippocampus import (
+    build_index,
     initialize_project,
     navigate,
     navigate_context_pack,
@@ -35,3 +36,13 @@ def test_public_support_helpers_are_exported():
     assert callable(navigate_context_pack)
     assert callable(render_context_snippets)
     assert callable(summarize_project_index)
+
+
+def test_build_index_rejects_no_llm(tmp_path):
+    initialize_project(tmp_path)
+    try:
+        build_index(tmp_path, no_llm=True)
+    except ValueError as exc:
+        assert "requires LLM" in str(exc)
+    else:
+        raise AssertionError("build_index should reject no_llm=True")

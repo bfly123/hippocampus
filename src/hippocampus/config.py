@@ -344,6 +344,23 @@ def load_config(config_path: Optional[Path] = None, *, project_root: Optional[Pa
     return HippoConfig()
 
 
+def llm_is_configured(cfg: HippoConfig) -> bool:
+    llm = cfg.llm
+    base_url = _normalize_str(llm.base_url or llm.api_base)
+    api_key = _normalize_str(llm.api_key)
+    model = _normalize_str(llm.fallback_model)
+    return bool(base_url and api_key and model)
+
+
+def require_llm_configured(cfg: HippoConfig) -> None:
+    if llm_is_configured(cfg):
+        return
+    raise RuntimeError(
+        "hippocampus requires LLM configuration. "
+        "Set ~/.hippocampus/hippocampus-llm.yaml or ~/.architec/architec-llm.yaml first."
+    )
+
+
 def default_config_yaml() -> str:
     """Generate default config.yaml content."""
     cfg = HippoConfig()
