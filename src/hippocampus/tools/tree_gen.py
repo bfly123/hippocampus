@@ -6,7 +6,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from ..types import TreeDoc, TreeNode
-from ..utils import write_json
+from ..utils import is_hidden, is_runtime_artifact, write_json
 
 
 def _parse_indent(line: str) -> tuple[int, str]:
@@ -46,6 +46,9 @@ def parse_directory_structure(text: str) -> TreeNode:
         # Build path from stack
         path_parts = [s[1].name for s in stack[1:]] + [clean_name]
         rel_path = "/".join(path_parts)
+        rel_path_obj = Path(rel_path)
+        if is_hidden(rel_path_obj) or is_runtime_artifact(rel_path_obj):
+            continue
 
         node_type = "dir" if is_dir else "file"
         node_id = f"{node_type}:{rel_path}"

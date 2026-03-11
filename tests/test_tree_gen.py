@@ -90,3 +90,22 @@ class TestParseDirectoryStructure:
         assert len(root.children) == 1
         assert root.children[0].type == "file"
         assert root.children[0].name == "setup.py"
+
+    def test_runtime_artifacts_are_filtered(self):
+        text = (
+            ".hippocampus/\n"
+            "  tree.json\n"
+            "llm-proxy/\n"
+            "  latest-context.json\n"
+            "  llm-proxy-viz.html\n"
+            "  src/\n"
+            "    app.py\n"
+            "opencode.json\n"
+        )
+        root = parse_directory_structure(text)
+        names = [child.name for child in root.children]
+        assert ".hippocampus" not in names
+        assert "opencode.json" not in names
+        assert names == ["llm-proxy"]
+        llm_proxy = root.children[0]
+        assert [child.name for child in llm_proxy.children] == ["src"]

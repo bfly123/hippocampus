@@ -47,6 +47,54 @@ def is_hidden(path: Path) -> bool:
     return any(part.startswith(".") for part in path.parts)
 
 
+_RUNTIME_ARTIFACT_NAMES = frozenset(
+    {
+        "opencode.json",
+        "latest-context.json",
+        "latest-context-history.jsonl",
+        "repomix-compress-trimmed.json",
+        "hippocampus-index.json",
+        "hippocampus-viz.html",
+        "code-signatures.json",
+        "phase1-cache.json",
+        "phase2-cache.json",
+        "phase3-cache.json",
+        "tag-vocab.json",
+        "tree.json",
+        "tree-diff.json",
+        "structure-prompt.md",
+    }
+)
+_RUNTIME_ARTIFACT_DIRS = frozenset(
+    {
+        ".hippocampus",
+        "__pycache__",
+        ".pytest_cache",
+        ".mypy_cache",
+        ".ruff_cache",
+        ".aider.tags.cache.v4",
+        "snapshots",
+        "dist",
+        "build",
+    }
+)
+
+
+def is_runtime_artifact(path: Path) -> bool:
+    """Check whether a path is a generated/runtime artifact, not source structure."""
+    normalized = Path(path)
+    if any(part in _RUNTIME_ARTIFACT_DIRS for part in normalized.parts):
+        return True
+    name = normalized.name
+    if name in _RUNTIME_ARTIFACT_NAMES:
+        return True
+    if name.endswith("-viz.html"):
+        return True
+    if name.startswith("latest-context") and normalized.suffix in {".json", ".jsonl"}:
+        return True
+    return False
+
+
 # File stems (case-insensitive) that are always project docs.
 _DOC_NAMES = frozenset({
     "readme", "changelog", "changes", "license", "licence",

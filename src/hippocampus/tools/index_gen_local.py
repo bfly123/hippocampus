@@ -7,7 +7,7 @@ from collections import Counter
 from pathlib import Path
 from typing import Any, Callable
 
-from ..utils import is_doc, is_hidden
+from ..utils import is_doc, is_hidden, is_runtime_artifact
 
 
 def detect_lang_hint(target: Path) -> str:
@@ -37,6 +37,8 @@ def build_local_phase1_results(
     for fp in files:
         rel = Path(fp)
         if is_hidden(rel) or is_doc(rel):
+            continue
+        if is_runtime_artifact(rel):
             continue
         if rel.parts and rel.parts[0] == "vendor":
             continue
