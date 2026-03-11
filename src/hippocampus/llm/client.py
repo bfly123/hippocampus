@@ -124,10 +124,19 @@ class HippoLLM:
         validator=None,
     ) -> tuple[str, list[str]]:
         max_retries = self.config.llm.retry_max
+        text = ""
         errors: list[str] = []
 
         for attempt in range(max_retries + 1):
-            text = await self.call(phase, messages)
+            try:
+                text = await self.call(phase, messages)
+            except Exception as exc:
+                if attempt >= max_retries:
+                    raise
+                errors = [str(exc)]
+                await asyncio.sleep(2 ** attempt + 1)
+                continue
+
             if validator is None:
                 return text, []
 

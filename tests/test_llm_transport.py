@@ -90,3 +90,70 @@ async def test_llm_call_raises_when_base_url_missing():
     llm = HippoLLM(cfg)
     with pytest.raises(RuntimeError, match="base_url is not configured"):
         await llm.call("phase_1", [{"role": "user", "content": "x"}])
+
+
+@pytest.mark.asyncio
+async def test_call_with_retry_retries_on_transport_exception(monkeypatch):
+    cfg = HippoConfig.model_validate(
+        {
+            "llm": {
+                "provider_type": "glm",
+                "api_style": "openai_responses",
+                "base_url": "https://backend.example/v1",
+                "api_key": "secret",
+                "retry_max": 2,
+            }
+        }
+    )
+    llm = HippoLLM(cfg)
+    attempts = {"n": 0}
+
+    async def fake_call(_phase, _messages):
+        attempts["n"] += 1
+        if attempts["n"] == 1:
+            raise RuntimeError("502 Bad Gateway")
+        return '{"ok": true}'
+
+    async def fake_sleep(_seconds):
+        return None
+
+    monkeypatch.setattr(llm, "call", fake_call)
+    monkeypatch.setattr("hippocampus.llm.client.asyncio.sleep", fake_sleep)
+
+    text, errors = await llm.call_with_retry(
+        "phase_2b",
+        [{"role": "user", "content": "x"}],
+        lambda _text: [],
+    )
+
+    assert attempts["n"] == 2
+    assert text == '{"ok": true}'
+    assert errors == []
+
+
+@pytest.mark.asyncio
+async def test_call_with_retry_raises_after_transport_retries(monkeypatch):
+    cfg = HippoConfig.model_validate(
+        {
+            "llm": {
+                "provider_type": "glm",
+                "api_style": "openai_responses",
+                "base_url": "https://backend.example/v1",
+                "api_key": "secret",
+                "retry_max": 1,
+            }
+        }
+    )
+    llm = HippoLLM(cfg)
+
+    async def always_fail(_phase, _messages):
+        raise RuntimeError("502 Bad Gateway")
+
+    async def fake_sleep(_seconds):
+        return None
+
+    monkeypatch.setattr(llm, "call", always_fail)
+    monkeypatch.setattr("hippocampus.llm.client.asyncio.sleep", fake_sleep)
+
+    with pytest.raises(RuntimeError, match="502 Bad Gateway"):
+        await llm.call_with_retry("phase_2b", [{"role": "user", "content": "x"}], lambda _text: [])
