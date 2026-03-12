@@ -1,0 +1,340 @@
+        // Render snapshot frame with animation
+        function renderSnapshot(index) {
+            const frame = SNAPSHOTS_DATA.frames[index];
+            if (!frame) return;
+
+            // Get role color helper (with tier fallback for old snapshots)
+            function getRoleColor(role) {
+                const colors = {
+                    'core': '#6366F1',
+                    'infra': '#A855F7',
+                    'interface': '#14B8A6',
+                    'test': '#F59E0B',
+                    'docs': '#94A3B8'
+                };
+                if (colors[role]) return colors[role];
+                // Fallback for old tier-based data
+                const tierColors = {
+                    'core': '#6366F1',
+                    'secondary': '#0F766E',
+                    'peripheral': '#94A3B8',
+                    'unknown': '#F59E0B'
+                };
+                return tierColors[role] || '#94A3B8';
+            }
+
+            // Build nodes with precomputed positions
+            const nodes = frame.modules.map(m => ({
+                id: m.id,
+                name: m.name,
+                x: m.x,
+                y: m.y,
+                symbolSize: 28 + Math.sqrt(m.core_score) * 36,
+                value: m.core_score,
+                category: m.role || m.tier,
+                role: m.role || m.tier,
+                itemStyle: { color: getRoleColor(m.role || m.tier) },
+                core_score: m.core_score,
+                file_count: m.file_count,
+                desc: ''
+            }));
+
+            const option = {
+                title: { show: false },
+                tooltip: {
+                    backgroundColor: 'rgba(255, 255, 255, 0.9)',
+                    borderColor: '#E2E8F0',
+                    textStyle: { color: '#1E293B' },
+                    padding: 12,
+                    extraCssText: 'box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1);',
+                    formatter: function(params) {
+                        if (params.dataType === 'node') {
+                            const d = params.data;
+                            return `<b>${d.name}</b><br/>` +
+                                   `Role: ${d.role || d.category}<br/>` +
+                                   `Score: ${d.core_score.toFixed(3)}<br/>` +
+                                   `Files: ${d.file_count}`;
+                        }
+                        return params.name;
+                    }
+                },
+                legend: ROLE_LEGEND,
+                series: [{
+                    id: 'modulesGraph',
+                    type: 'graph',
+                    layout: 'none',
+                    coordinateSystem: null,
+                    data: nodes,
+                    links: frame.links || [],
+                    categories: ROLE_CATEGORIES,
+                    roam: true,
+                    draggable: false,
+                    edgeSymbol: ['none', 'arrow'],
+                    edgeSymbolSize: [4, 8],
+                    label: {
+                        show: true,
+                        position: 'right',
+                        formatter: '{b}',
+                        fontSize: 12,
+                        fontWeight: 600,
+                        color: '#0F172A',
+                        distance: 6,
+                        textBorderColor: '#FFFFFF',
+                        textBorderWidth: 3
+                    },
+                    labelLayout: { hideOverlap: true },
+                    universalTransition: {
+                        enabled: true,
+                        seriesKey: 'modulesGraph'
+                    },
+                    animationDurationUpdate: 600,
+                    animationEasingUpdate: 'cubicOut'
+                }]
+            };
+
+            mainChart.setOption(option, { lazyUpdate: true });
+
+            // Bind click event for module nodes
+            mainChart.off('click');
+            mainChart.on('click', function(params) {
+                if (params.dataType === 'node') {
+                    showModuleDetails(params.data);
+                }
+            });
+        }
+
+        // Render files graph
+        function renderFilesGraph(filterModule = null) {
+            let graphData = FILES_GRAPH;
+
+            // Filter by module if specified
+            if (filterModule) {
+                const filteredNodes = graphData.nodes.filter(n => n.module === filterModule);
+                const nodeIds = new Set(filteredNodes.map(n => n.id));
+                const filteredLinks = graphData.links.filter(l =>
+                    nodeIds.has(l.source) && nodeIds.has(l.target)
+                );
+                graphData = {
+                    nodes: filteredNodes,
+                    links: filteredLinks,
+                    categories: graphData.categories
+                };
+            }
+
+            const option = {
+                title: {
+                    text: filterModule ? `Files in ${filterModule}` : 'File Dependencies',
+                    left: 20,
+                    top: 10,
+                    textStyle: { fontSize: 16, color: '#333' }
+                },
+                tooltip: {
+                    backgroundColor: 'rgba(255, 255, 255, 0.9)',
+                    borderColor: '#E2E8F0',
+                    textStyle: { color: '#1E293B' },
+                    padding: 12,
+                    formatter: function(params) {
+                        if (params.dataType === 'node') {
+                            const d = params.data;
+                            return `<b>${d.name}</b><br/>` +
+                                   `Module: ${d.module}<br/>` +
+                                   `Language: ${d.lang}<br/>` +
+                                   `Symbols: ${d.value}<br/>` +
+                                   `<i>${d.desc}</i>`;
+                        } else if (params.dataType === 'edge') {
+                            return `${params.data.source} → ${params.data.target}`;
+                        }
+                        return params.name;
+                    }
+                },
+                series: [{
+                    type: 'graph',
+                    layout: 'force',
+                    data: graphData.nodes,
+                    links: graphData.links,
+                    categories: graphData.categories,
+                    roam: true,
+                    draggable: true,
+                    edgeSymbol: ['none', 'arrow'],
+                    edgeSymbolSize: [4, 8],
+                    force: {
+                        repulsion: 200,
+                        edgeLength: 100,
+                        gravity: 0.1
+                    },
+                    label: {
+                        show: true,
+                        position: 'right',
+                        formatter: '{b}',
+                        fontSize: 10
+                    },
+                    labelLayout: { hideOverlap: true },
+                    emphasis: {
+                        scale: true,
+                        focus: 'adjacency',
+                        lineStyle: {
+                            width: 3,
+                            opacity: 0.9
+                        }
+                    }
+                }]
+            };
+            mainChart.setOption(option, true);
+
+            // Add click event for file nodes
+            mainChart.off('click');
+            mainChart.on('click', function(params) {
+                if (params.dataType === 'node') {
+                    // Get module name from node data
+                    const moduleId = params.data.module || 'unknown';
+                    const moduleName = moduleId.replace('mod:', '');
+                    showFileDetails(params.data, moduleName);
+                }
+            });
+        }
+
+        // Render functions graph
+        function renderFunctionsGraph(focusFile = null) {
+            let graphData = FUNCTIONS_GRAPH;
+
+            // If focus file specified, filter to relevant functions
+            if (focusFile && INDEX_DATA.function_dependencies) {
+                const relevantFuncs = new Set();
+
+                // Add functions in focus file
+                for (const funcKey in INDEX_DATA.function_dependencies) {
+                    const filePath = funcKey.split(':')[0];
+                    if (filePath === focusFile) {
+                        relevantFuncs.add(funcKey);
+                        // Add targets
+                        for (const dep of INDEX_DATA.function_dependencies[funcKey]) {
+                            relevantFuncs.add(dep.target);
+                        }
+                    }
+                }
+
+                // Add functions that call into focus file
+                for (const funcKey in INDEX_DATA.function_dependencies) {
+                    for (const dep of INDEX_DATA.function_dependencies[funcKey]) {
+                        const targetFile = dep.target.split(':')[0];
+                        if (targetFile === focusFile) {
+                            relevantFuncs.add(funcKey);
+                            relevantFuncs.add(dep.target);
+                        }
+                    }
+                }
+
+                const filteredNodes = graphData.nodes.filter(n => relevantFuncs.has(n.id));
+                const nodeIds = new Set(filteredNodes.map(n => n.id));
+                const filteredLinks = graphData.links.filter(l =>
+                    nodeIds.has(l.source) && nodeIds.has(l.target)
+                );
+
+                graphData = {
+                    nodes: filteredNodes,
+                    links: filteredLinks,
+                    categories: graphData.categories
+                };
+            }
+
+            const option = {
+                title: {
+                    text: focusFile ? `Functions in ${focusFile}` : 'Function Call Graph',
+                    left: 20,
+                    top: 10,
+                    textStyle: { fontSize: 16, color: '#333' }
+                },
+                tooltip: {
+                    backgroundColor: 'rgba(255, 255, 255, 0.9)',
+                    borderColor: '#E2E8F0',
+                    textStyle: { color: '#1E293B' },
+                    padding: 12,
+                    formatter: function(params) {
+                        if (params.dataType === 'node') {
+                            const d = params.data;
+                            return `<b>${d.name}</b><br/>` +
+                                   `File: ${d.file}<br/>` +
+                                   `Module: ${d.module}`;
+                        } else if (params.dataType === 'edge') {
+                            const d = params.data;
+                            return `${d.source} → ${d.target}<br/>Calls: ${d.value || 1}`;
+                        }
+                        return params.name;
+                    }
+                },
+                series: [{
+                    type: 'graph',
+                    layout: 'force',
+                    data: graphData.nodes,
+                    links: graphData.links,
+                    roam: true,
+                    draggable: true,
+                    edgeSymbol: ['none', 'arrow'],
+                    edgeSymbolSize: [4, 8],
+                    force: {
+                        repulsion: 150,
+                        edgeLength: 80,
+                        gravity: 0.1
+                    },
+                    label: {
+                        show: true,
+                        position: 'right',
+                        formatter: '{b}',
+                        fontSize: 9
+                    },
+                    labelLayout: { hideOverlap: true },
+                    emphasis: {
+                        scale: true,
+                        focus: 'adjacency',
+                        lineStyle: {
+                            width: 3,
+                            opacity: 0.9
+                        }
+                    }
+                }]
+            };
+            mainChart.setOption(option, true);
+
+            // Add click event
+            mainChart.off('click');
+            mainChart.on('click', function(params) {
+                if (params.dataType === 'node') {
+                    showFunctionDetails(params.data);
+                }
+            });
+        }
+
+        // Render files treemap
+        function renderFilesTreemap() {
+            const option = {
+                title: { text: 'File Tree Structure', left: 'center' },
+                tooltip: {},
+                series: [{
+                    type: 'treemap',
+                    data: [FILES_TREEMAP],
+                    leafDepth: 2,
+                    roam: false,
+                    label: { show: true, formatter: '{b}' },
+                    itemStyle: { borderColor: '#fff' }
+                }]
+            };
+            mainChart.setOption(option);
+        }
+
+        // Render diff sidebar
+        function renderDiffSidebar(index) {
+            if (index === 0) {
+                document.getElementById('details-content').innerHTML =
+                    '<p style="color: #999;">Baseline snapshot (no previous comparison)</p>' +
+                    '<p style="color: #666; font-size: 12px; margin-top: 10px;">💡 Click on a module to view details</p>';
+                return;
+            }
+
+            const diff = SNAPSHOTS_DATA.diffs[index - 1];
+            if (!diff) return;
+
+            let html = '<h3 style="font-size: 16px; margin-bottom: 15px;">Changes from Previous Snapshot</h3>';
+            html += '<p style="color: #666; font-size: 12px; margin-bottom: 15px;">💡 Click on a module to view details</p>';
+
+            if (diff.added.length > 0) {
+                html += '<h4 style="color: #10B981; margin-top: 15px; font-size: 14px;">🟢 Added Modules</h4>';

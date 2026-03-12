@@ -8,12 +8,12 @@ from hippocampus.nav.navigate_paths import validate_repo_paths
 
 def test_extract_mentions_detects_files_and_identifiers() -> None:
     all_files = [
-        "src/hippocampus/tools/ranker_graph.py",
+        "src/hippocampus/tools/ranker/ranker_graph.py",
         "src/hippocampus/nav/navigate.py",
     ]
     index = {
         "files": {
-            "src/hippocampus/tools/ranker_graph.py": {
+            "src/hippocampus/tools/ranker/ranker_graph.py": {
                 "signatures": [{"name": "GraphRanker"}, {"name": "rank_files"}]
             }
         }
@@ -26,7 +26,7 @@ def test_extract_mentions_detects_files_and_identifiers() -> None:
         index=index,
     )
 
-    assert "src/hippocampus/tools/ranker_graph.py" in mentioned_files
+    assert "src/hippocampus/tools/ranker/ranker_graph.py" in mentioned_files
     assert "GraphRanker" in mentioned_idents
     assert "rank_files" in mentioned_idents
 
@@ -48,15 +48,15 @@ def test_extract_mentions_filters_noise_tokens() -> None:
 def test_validate_repo_paths_filters_invalid_and_normalizes(tmp_path: Path) -> None:
     root = tmp_path
     index_files = {
-        "src/hippocampus/tools/ranker_graph.py",
+        "src/hippocampus/tools/ranker/ranker_graph.py",
         "src/hippocampus/nav/navigate.py",
     }
     candidates = [
-        "src/hippocampus/tools/ranker_graph.py",
+        "src/hippocampus/tools/ranker/ranker_graph.py",
         "src\\hippocampus\\nav\\navigate.py",
         "/abs/path.py",
         "../escape.py",
-        "src/unknown.py",
+        "unknown.py",
     ]
 
     validated = validate_repo_paths(
@@ -66,7 +66,7 @@ def test_validate_repo_paths_filters_invalid_and_normalizes(tmp_path: Path) -> N
     )
 
     assert validated == [
-        "src/hippocampus/tools/ranker_graph.py",
+        "src/hippocampus/tools/ranker/ranker_graph.py",
         "src/hippocampus/nav/navigate.py",
     ]
 

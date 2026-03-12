@@ -1,7 +1,5 @@
 """Default paths, schema versions, and supported languages."""
 
-from pathlib import Path
-
 # Directory names
 HIPPO_DIR = ".hippocampus"
 QUERIES_DIR = "queries"
@@ -29,10 +27,6 @@ ARCHITECT_REPORT_FILE = "architect-report.json"
 SIGNATURES_SCHEMA_VERSION = 1
 INDEX_SCHEMA_VERSION = 2
 TREE_SCHEMA_VERSION = 1
-
-# Vendor query path (relative to project root).
-# tree-sitter-language-pack matches the runtime parser backend.
-VENDOR_QUERIES_REL = Path("vendor/aider/aider/queries/tree-sitter-language-pack")
 
 # Token estimation ratio (chars per token, rough average)
 CHARS_PER_TOKEN = 4

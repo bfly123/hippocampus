@@ -3,7 +3,7 @@ import subprocess
 
 
 ROOT = Path(__file__).resolve().parents[1]
-SCRIPT = ROOT / "scripts" / "install.sh"
+SCRIPT = ROOT / "install.sh"
 
 
 def test_install_script_help():
@@ -15,7 +15,7 @@ def test_install_script_help():
         check=False,
     )
     assert result.returncode == 0
-    assert "Usage: ./scripts/install.sh" in result.stdout
+    assert "Usage: ./install.sh" in result.stdout
     assert "hippocampus-llm.yaml" in result.stdout
     assert ".architec/architec-llm.yaml" in result.stdout
 

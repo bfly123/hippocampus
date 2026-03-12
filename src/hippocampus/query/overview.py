@@ -77,6 +77,69 @@ def _render_l2_files(mod: dict, files: dict[str, dict]) -> str:
     return "\n".join(lines)
 
 
+def _sorted_modules_by_score(modules: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    return sorted(
+        modules,
+        key=lambda module: module.get("core_score", 0),
+        reverse=True,
+    )
+
+
+def _render_l1_section(
+    sorted_mods: list[dict[str, Any]],
+    remaining: int,
+) -> tuple[str | None, int]:
+    if remaining <= 0 or not sorted_mods:
+        return None, remaining
+
+    lines = ["## Modules", ""]
+    added = False
+    for mod in sorted_mods:
+        line = _render_l1(mod)
+        line_tokens = estimate_tokens(line + "\n")
+        if remaining - line_tokens < 0:
+            break
+        lines.append(line)
+        remaining -= line_tokens
+        added = True
+    if not added:
+        return None, remaining
+    lines.append("")
+    return "\n".join(lines), remaining
+
+
+def _render_l2_section(
+    sorted_mods: list[dict[str, Any]],
+    files: dict[str, dict],
+    remaining: int,
+) -> tuple[str | None, int]:
+    if remaining <= 0:
+        return None, remaining
+
+    blocks: list[str] = []
+    for mod in sorted_mods:
+        if mod.get("tier") != "core":
+            continue
+        block = _render_l2_files(mod, files)
+        if not block:
+            continue
+        block_tokens = estimate_tokens(block + "\n")
+        if remaining - block_tokens < 0:
+            break
+        blocks.append(block)
+        remaining -= block_tokens
+
+    if not blocks:
+        return None, remaining
+
+    header = "## Core Module Files\n\n"
+    header_tokens = estimate_tokens(header)
+    if remaining < header_tokens:
+        return None, remaining
+    remaining -= header_tokens
+    return header + "\n".join(blocks) + "\n", remaining
+
+
 def build_overview(
     index: dict[str, Any],
     budget: int = 4000,
@@ -91,13 +154,7 @@ def build_overview(
     project = index.get("project", {})
     modules = index.get("modules", [])
     files = index.get("files", {})
-
-    # Sort modules by core_score descending
-    sorted_mods = sorted(
-        modules,
-        key=lambda m: m.get("core_score", 0),
-        reverse=True,
-    )
+    sorted_mods = _sorted_modules_by_score(modules)
 
     parts: list[str] = []
     layers: list[str] = []
@@ -110,46 +167,15 @@ def build_overview(
     remaining -= l0_tokens
     layers.append("L0")
 
-    # L1: module summaries (by score)
-    if remaining > 0 and sorted_mods:
-        l1_lines = ["## Modules", ""]
-        l1_added = False
-        for mod in sorted_mods:
-            line = _render_l1(mod)
-            line_tokens = estimate_tokens(line + "\n")
-            if remaining - line_tokens < 0:
-                break
-            l1_lines.append(line)
-            remaining -= line_tokens
-            l1_added = True
-        if l1_added:
-            l1_lines.append("")
-            parts.append("\n".join(l1_lines))
-            layers.append("L1")
+    l1_section, remaining = _render_l1_section(sorted_mods, remaining)
+    if l1_section:
+        parts.append(l1_section)
+        layers.append("L1")
 
-    # L2: file lists for core modules only
-    if remaining > 0:
-        l2_parts: list[str] = []
-        l2_added = False
-        for mod in sorted_mods:
-            if mod.get("tier") != "core":
-                continue
-            block = _render_l2_files(mod, files)
-            if not block:
-                continue
-            block_tokens = estimate_tokens(block + "\n")
-            if remaining - block_tokens < 0:
-                break
-            l2_parts.append(block)
-            remaining -= block_tokens
-            l2_added = True
-        if l2_added:
-            header = "## Core Module Files\n\n"
-            header_tokens = estimate_tokens(header)
-            if remaining >= header_tokens:
-                remaining -= header_tokens
-                parts.append(header + "\n".join(l2_parts) + "\n")
-                layers.append("L2")
+    l2_section, remaining = _render_l2_section(sorted_mods, files, remaining)
+    if l2_section:
+        parts.append(l2_section)
+        layers.append("L2")
 
     content = "\n".join(parts)
     consumed = budget - remaining

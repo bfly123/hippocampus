@@ -5,10 +5,51 @@ Extracts file mentions and identifiers from conversation history
 to drive task-relevant context generation.
 """
 
-import re
-from pathlib import Path
 from collections import deque
-from typing import Set, Dict
+from pathlib import Path
+import re
+from typing import Dict, Set
+
+
+def _tokenize_path_words(text: str) -> tuple[Set[str], Set[str]]:
+    words = {
+        word.rstrip(",.!;:?").strip("\"'`*_")
+        for word in text.split()
+    }
+    normalized_words = {word.replace("\\", "/") for word in words}
+    return words, normalized_words
+
+
+def _collect_full_path_mentions(
+    normalized_words: Set[str],
+    all_files: Set[str],
+) -> Set[str]:
+    mentioned: Set[str] = set()
+    for file in all_files:
+        normalized_file = file.replace("\\", "/")
+        if normalized_file in normalized_words:
+            mentioned.add(file)
+    return mentioned
+
+
+def _build_unique_basename_map(all_files: Set[str]) -> Dict[str, list[str]]:
+    basename_map: Dict[str, list[str]] = {}
+    for file in all_files:
+        basename = Path(file).name
+        if "/" in file or "." in basename or "_" in basename or "-" in basename:
+            basename_map.setdefault(basename, []).append(file)
+    return basename_map
+
+
+def _collect_unique_basename_mentions(
+    words: Set[str],
+    basename_map: Dict[str, list[str]],
+) -> Set[str]:
+    mentioned: Set[str] = set()
+    for basename, files in basename_map.items():
+        if len(files) == 1 and basename in words:
+            mentioned.add(files[0])
+    return mentioned
 
 
 def extract_file_mentions(text: str, all_files: Set[str]) -> Set[str]:
@@ -22,30 +63,10 @@ def extract_file_mentions(text: str, all_files: Set[str]) -> Set[str]:
     Returns:
         Set of mentioned file paths
     """
-    # 1. Tokenize and clean punctuation
-    words = set(word.rstrip(",.!;:?").strip("\"'`*_") for word in text.split())
-
-    # 2. Normalize paths (unify to /)
-    normalized_words = {w.replace("\\", "/") for w in words}
-
-    # 3. Match full paths
-    mentioned = set()
-    for file in all_files:
-        normalized_file = file.replace("\\", "/")
-        if normalized_file in normalized_words:
-            mentioned.add(file)
-
-    # 4. Match basenames (if unique)
-    basename_map = {}
-    for file in all_files:
-        basename = Path(file).name
-        if "/" in file or "." in basename or "_" in basename or "-" in basename:
-            basename_map.setdefault(basename, []).append(file)
-
-    for basename, files in basename_map.items():
-        if len(files) == 1 and basename in words:
-            mentioned.add(files[0])
-
+    words, normalized_words = _tokenize_path_words(text)
+    mentioned = _collect_full_path_mentions(normalized_words, all_files)
+    basename_map = _build_unique_basename_map(all_files)
+    mentioned.update(_collect_unique_basename_mentions(words, basename_map))
     return mentioned
 
 

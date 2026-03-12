@@ -1,0 +1,340 @@
+                    `;
+                });
+
+                html += '</div>';
+            } else {
+                html += '<p style="color: #999; margin-top: 20px;">No symbols available</p>';
+            }
+
+            document.getElementById('details-content').innerHTML = html;
+
+            // Add breadcrumb click handler for module name
+            const breadcrumbModule = document.getElementById('breadcrumb-module');
+            if (breadcrumbModule) {
+                breadcrumbModule.addEventListener('click', function() {
+                    const moduleNode = MODULES_GRAPH.nodes.find(n => n.name === moduleName);
+                    if (moduleNode) {
+                        viewStack.pop();
+                        showModuleDetails(moduleNode);
+                    }
+                });
+            }
+
+            // Bind focus-file button via data attribute (safe from quote injection)
+            const focusFileBtn = document.querySelector('.focus-file-btn');
+            if (focusFileBtn) {
+                focusFileBtn.addEventListener('click', function() {
+                    focusFileGraph(this.getAttribute('data-file-path'));
+                });
+            }
+
+            // Bind focus-func buttons via data attributes
+            document.querySelectorAll('.focus-func-btn').forEach(btn => {
+                btn.addEventListener('click', function(e) {
+                    e.stopPropagation();
+                    focusFunctionGraph(this.getAttribute('data-func-key'));
+                });
+            });
+
+            // Bind clickable symbol rows (function/method) for sidebar drill-down
+            document.querySelectorAll('.symbol-row-clickable').forEach(row => {
+                row.addEventListener('mouseenter', function() {
+                    this.style.background = '#e0f2fe';
+                    this.style.borderLeftColor = '#0ea5e9';
+                });
+                row.addEventListener('mouseleave', function() {
+                    this.style.background = '#f9fafb';
+                    this.style.borderLeftColor = '';
+                });
+                row.addEventListener('click', function(e) {
+                    // Don't trigger if the 🕸️ icon was clicked
+                    if (e.target.closest('.focus-func-btn')) return;
+                    const idx = parseInt(this.getAttribute('data-sig-index'), 10);
+                    if (isNaN(idx)) return;
+                    // Look up full metadata by index (handles duplicate names)
+                    const sig = fileData.signatures[idx];
+                    if (!sig) return;
+                    const funcKey = `${fileData.path}:${sig.name}`;
+                    const funcDataObj = {
+                        id: funcKey,
+                        name: sig.name,
+                        file: fileData.path,
+                        module: (INDEX_DATA.files[fileData.path] || {}).module || 'unknown',
+                        kind: sig.kind || '',
+                        line: sig.line,
+                        desc: sig.desc || ''
+                    };
+                    showFunctionDetails(funcDataObj, fileData, moduleName);
+                });
+            });
+        }
+
+        // Show function details
+        function showFunctionDetails(funcData, parentFileData, parentModuleName) {
+            // Push file onto viewStack when drilling down from file details
+            if (parentFileData) {
+                viewStack.push({ type: 'file', fileData: parentFileData, moduleName: parentModuleName });
+            }
+
+            const funcKey = funcData.id;
+            const funcDeps = INDEX_DATA.function_dependencies || {};
+            const myDeps = funcDeps[funcKey] || [];
+
+            // Resolve module name for breadcrumb
+            const rawModule = parentModuleName || funcData.module || 'unknown';
+            const displayModule = rawModule.replace('mod:', '');
+
+            // Build breadcrumb: Home › Module › File › Function (full) or Home › Module › Function (from graph)
+            let breadcrumbHtml = `
+                <div style="padding: 10px 0; margin-bottom: 15px; border-bottom: 1px solid #e5e7eb;">
+                    <div style="font-size: 12px; color: #64748b;">
+                        <span style="cursor: pointer; color: #3b82f6;" onclick="switchView('modules', event)">🏠 Home</span>
+                        <span style="margin: 0 6px;">›</span>
+                        <span id="breadcrumb-func-module" style="cursor: pointer; color: #3b82f6;">${displayModule}</span>
+            `;
+            if (parentFileData) {
+                breadcrumbHtml += `
+                        <span style="margin: 0 6px;">›</span>
+                        <span id="breadcrumb-func-file" style="cursor: pointer; color: #3b82f6;">${parentFileData.name}</span>
+                `;
+            }
+            breadcrumbHtml += `
+                        <span style="margin: 0 6px;">›</span>
+                        <span style="color: #1e293b; font-weight: 600;">${funcData.name}</span>
+                    </div>
+                </div>
+            `;
+
+            let html = breadcrumbHtml;
+            html += `
+                <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 15px;">
+                    <h3 style="color: #333; margin: 0;">⚡ ${funcData.name}</h3>
+                    <button class="focus-func-detail-btn" data-func-key="${funcKey.replace(/"/g, '&quot;')}"
+                            style="background: #eff6ff; color: #3b82f6; border: 1px solid #bfdbfe;
+                                   padding: 6px 12px; border-radius: 6px; cursor: pointer; font-size: 12px;
+                                   white-space: nowrap; flex-shrink: 0;">
+                        🕸️ Focus Graph
+                    </button>
+                </div>
+            `;
+
+            // Kind badge
+            const kind = funcData.kind || '';
+            if (kind) {
+                const kindColor = {'function': '#8b5cf6', 'method': '#ec4899', 'class': '#3b82f6'}[kind] || '#6b7280';
+                html += `
+                    <div style="margin-bottom: 12px;">
+                        <span style="display: inline-block; background: ${kindColor}20; color: ${kindColor};
+                                     padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: 600;
+                                     text-transform: uppercase;">${kind}</span>
+                    </div>
+                `;
+            }
+
+            // Description
+            const desc = funcData.desc || '';
+            if (desc) {
+                html += `<p style="color: #666; font-size: 13px; margin-bottom: 15px;">${desc}</p>`;
+            }
+
+            html += `
+                <div class="stat-item">
+                    <div class="stat-label">File</div>
+                    <div class="stat-value" style="font-size: 11px; word-break: break-all;">${funcData.file}</div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-label">Module</div>
+                    <div class="stat-value">${displayModule}</div>
+                </div>
+            `;
+
+            if (funcData.line) {
+                html += `
+                    <div class="stat-item">
+                        <div class="stat-label">Line</div>
+                        <div class="stat-value">${funcData.line}</div>
+                    </div>
+                `;
+            }
+
+            // Show function calls
+            if (myDeps.length > 0) {
+                html += `
+                    <h4 style="margin-top: 20px; margin-bottom: 10px; color: #475569;">
+                        Calls (${myDeps.length})
+                    </h4>
+                    <div style="margin-bottom: 15px;">
+                `;
+                myDeps.forEach(dep => {
+                    const targetParts = dep.target.split(':');
+                    const targetFunc = targetParts[1] || dep.target;
+                    const targetFile = targetParts[0] || '';
+                    html += `
+                        <div style="padding: 6px 10px; margin-bottom: 4px; background: #f1f5f9;
+                                    border-left: 3px solid #64748b; border-radius: 3px; font-size: 12px;">
+                            <span style="color: #334155;">→ ${targetFunc}</span>
+                            <span style="color: #94a3b8; margin-left: 8px;">(${dep.weight || 1}x)</span>
+                            <div style="font-size: 10px; color: #94a3b8; margin-top: 2px;">${targetFile}</div>
+                        </div>
+                    `;
+                });
+                html += '</div>';
+            }
+
+            // Find callers (functions that call this one)
+            const callers = [];
+            for (const [callerKey, deps] of Object.entries(funcDeps)) {
+                for (const dep of deps) {
+                    if (dep.target === funcKey) {
+                        const callerParts = callerKey.split(':');
+                        callers.push({
+                            name: callerParts[1] || callerKey,
+                            file: callerParts[0] || '',
+                            weight: dep.weight || 1
+                        });
+                    }
+                }
+            }
+
+            if (callers.length > 0) {
+                html += `
+                    <h4 style="margin-top: 20px; margin-bottom: 10px; color: #475569;">
+                        Called By (${callers.length})
+                    </h4>
+                    <div style="margin-bottom: 15px;">
+                `;
+                callers.forEach(caller => {
+                    html += `
+                        <div style="padding: 6px 10px; margin-bottom: 4px; background: #fef3c7;
+                                    border-left: 3px solid #f59e0b; border-radius: 3px; font-size: 12px;">
+                            <span style="color: #92400e;">← ${caller.name}</span>
+                            <span style="color: #d97706; margin-left: 8px;">(${caller.weight}x)</span>
+                            <div style="font-size: 10px; color: #d97706; margin-top: 2px;">${caller.file}</div>
+                        </div>
+                    `;
+                });
+                html += '</div>';
+            }
+
+            document.getElementById('details-content').innerHTML = html;
+
+            // Bind breadcrumb click: Module → go back to module details
+            const bcModule = document.getElementById('breadcrumb-func-module');
+            if (bcModule) {
+                bcModule.addEventListener('click', function() {
+                    const modId = rawModule.startsWith('mod:') ? rawModule : 'mod:' + rawModule;
+                    const moduleNode = MODULES_GRAPH.nodes.find(n => n.id === modId || n.name === displayModule);
+                    if (moduleNode) {
+                        // Only pop if we pushed (sidebar drill-down path)
+                        if (parentFileData) {
+                            viewStack.pop(); // pop file entry pushed by showFunctionDetails
+                            viewStack.pop(); // pop module entry pushed by showFileDetails
+                        }
+                        showModuleDetails(moduleNode);
+                    }
+                });
+            }
+
+            // Bind breadcrumb click: File → go back to file details
+            const bcFile = document.getElementById('breadcrumb-func-file');
+            if (bcFile && parentFileData) {
+                bcFile.addEventListener('click', function() {
+                    // Pop the file entry pushed by showFunctionDetails
+                    viewStack.pop();
+                    // Use skipPush to avoid re-pushing module onto viewStack
+                    showFileDetails(parentFileData, displayModule, { skipPush: true });
+                });
+            }
+
+            // Bind focus graph button for this function
+            const focusFuncDetailBtn = document.querySelector('.focus-func-detail-btn');
+            if (focusFuncDetailBtn) {
+                focusFuncDetailBtn.addEventListener('click', function() {
+                    focusFunctionGraph(this.getAttribute('data-func-key'));
+                });
+            }
+        }
+
+        // Focus on file's 1-hop dependency graph
+        function focusFileGraph(centerFilePath) {
+            // 1. Collect 1-hop neighbors
+            const relatedNodes = new Set([centerFilePath]);
+            const filteredLinks = [];
+
+            FILES_GRAPH.links.forEach(link => {
+                if (link.source === centerFilePath) {
+                    relatedNodes.add(link.target);
+                    filteredLinks.push({...link, direction: 'downstream'});
+                }
+                if (link.target === centerFilePath) {
+                    relatedNodes.add(link.source);
+                    filteredLinks.push({...link, direction: 'upstream'});
+                }
+            });
+
+            // 2. Filter nodes (max 20)
+            let filteredNodes = FILES_GRAPH.nodes.filter(n => relatedNodes.has(n.id));
+            if (filteredNodes.length > 20) {
+                const centerNode = filteredNodes.find(n => n.id === centerFilePath);
+                const others = filteredNodes.filter(n => n.id !== centerFilePath)
+                    .sort((a, b) => (b.value || 0) - (a.value || 0))
+                    .slice(0, 19);
+                filteredNodes = [centerNode, ...others];
+            }
+
+            // 3. Re-filter links after node truncation
+            const keptNodeIds = new Set(filteredNodes.map(n => n.id));
+            const validLinks = filteredLinks.filter(
+                link => keptNodeIds.has(link.source) && keptNodeIds.has(link.target)
+            );
+
+            // 4. Handle empty neighbors
+            if (filteredNodes.length <= 1) {
+                const fileName = centerFilePath.split('/').pop();
+                mainChart.setOption({
+                    title: { text: `Focus: ${fileName}`, subtext: 'No connected files found', left: 20, top: 10, textStyle: { fontSize: 16, color: '#333' } },
+                    series: [{ type: 'graph', layout: 'force', data: filteredNodes.map(n => ({...n, symbolSize: 50, itemStyle: { color: '#ef4444', borderColor: '#fee2e2', borderWidth: 3 }})), links: [], roam: true, label: { show: true, fontSize: 11 } }]
+                }, true);
+                mainChart.off('click');
+                updateBreadcrumb(['Module Graph', `File: ${fileName}`]);
+                showBackButton();
+                return;
+            }
+
+            // 5. Highlight center node
+            const styledNodes = filteredNodes.map(n => ({
+                ...n,
+                symbolSize: n.id === centerFilePath ? 50 : 20,
+                itemStyle: n.id === centerFilePath ?
+                    { color: '#ef4444', borderColor: '#fee2e2', borderWidth: 3 } :
+                    n.itemStyle
+            }));
+
+            // 6. Style edges by direction
+            const styledLinks = validLinks.map(link => ({
+                ...link,
+                lineStyle: {
+                    width: link.direction === 'upstream' ? 2 : 1.5,
+                    type: link.direction === 'upstream' ? 'dashed' : 'solid',
+                    color: link.direction === 'upstream' ? '#ef4444' : '#3b82f6',
+                    opacity: 0.6
+                }
+            }));
+
+            // 5. Render graph
+            const fileName = centerFilePath.split('/').pop();
+            const option = {
+                title: {
+                    text: `Focus: ${fileName}`,
+                    subtext: `${filteredNodes.length - 1} connected files`,
+                    left: 20,
+                    top: 10,
+                    textStyle: { fontSize: 16, color: '#333' }
+                },
+                tooltip: {
+                    backgroundColor: 'rgba(255, 255, 255, 0.9)',
+                    borderColor: '#E2E8F0',
+                    textStyle: { color: '#1E293B' },
+                    padding: 12,
+                    formatter: function(params) {
+                        if (params.dataType === 'node') {

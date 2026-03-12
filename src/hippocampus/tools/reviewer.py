@@ -1,58 +1,37 @@
 """Automated architecture reviewer for code changes."""
 
+from __future__ import annotations
+
 import json
 import subprocess
-import sys
 from pathlib import Path
-from typing import Any, Dict, List, Optional
 
 from ..config import HippoConfig
 from ..llm.client import HippoLLM
 
+_MAX_DIFF_CHARS = 20000
+_STRUCTURE_MAP_PATH = Path(".hippocampus/structure-prompt.md")
 
-class Reviewer:
-    """Architecture reviewer using LLM."""
 
-    def __init__(self, config: Optional[HippoConfig] = None):
-        self.config = config or HippoConfig()
-        self.llm = HippoLLM(self.config)
+def _load_structure_map() -> str:
+    if not _STRUCTURE_MAP_PATH.exists():
+        return "No architecture map found. Please run 'hippo index' first."
+    return _STRUCTURE_MAP_PATH.read_text(encoding="utf-8")
 
-    def _get_staged_diff(self) -> str:
-        """Get git diff of staged changes."""
-        try:
-            result = subprocess.run(
-                ["git", "diff", "--staged"],
-                capture_output=True,
-                text=True,
-                check=True,
-            )
-            return result.stdout
-        except subprocess.CalledProcessError:
-            return ""
 
-    def _load_structure_map(self) -> str:
-        """Load the architecture map."""
-        path = Path(".hippocampus/structure-prompt.md")
-        if not path.exists():
-            return "No architecture map found. Please run 'hippo index' first."
-        return path.read_text(encoding="utf-8")
+def _truncate_diff(diff: str) -> str:
+    if len(diff) <= _MAX_DIFF_CHARS:
+        return diff
+    return diff[:_MAX_DIFF_CHARS] + "\n... (truncated)"
 
-    async def review_staged(self) -> int:
-        """Review staged changes. Returns exit code (0=Pass, 1=Fail)."""
-        diff = self._get_staged_diff()
-        if not diff.strip():
-            print("✅ No staged changes to review.")
-            return 0
 
-        # Truncate diff if too large (naive truncation)
-        # TODO: Use proper token estimation
-        if len(diff) > 20000:
-            diff = diff[:20000] + "
-... (truncated)"
-
-        structure_map = self._load_structure_map()
-
-        prompt = f"""
+def _build_review_prompt(structure_map: str, diff: str) -> str:
+    issue_format = (
+        '{"severity": "CRITICAL" | "WARNING" | "INFO", '
+        '"file": "<filename>", '
+        '"message": "<concise description>"}'
+    )
+    return f"""
 You are the Architecture Gatekeeper for this project.
 Your goal is to prevent architectural decay by blocking commits that violate the project's design principles.
 
@@ -82,7 +61,7 @@ Return valid JSON ONLY. No preamble.
     "score": <0-100 integer>,
     "status": "PASS" | "BLOCK",
     "issues": [
-        {{"severity": "CRITICAL" | "WARNING" | "INFO", "file": "<filename>", "message": "<concise description>"}}
+        {issue_format}
     ],
     "summary": "<one sentence summary>"
 }}
@@ -92,60 +71,83 @@ DECISION LOGIC:
 - Any CRITICAL issue => BLOCK
 - Otherwise => PASS
 """
-        print("🔍  Hippocampus: Reviewing architecture compliance...")
+
+
+def _strip_markdown_fences(response_text: str) -> str:
+    if "```json" in response_text:
+        return response_text.split("```json", 1)[1].split("```", 1)[0].strip()
+    if "```" in response_text:
+        return response_text.split("```", 1)[1].split("```", 1)[0].strip()
+    return response_text
+
+
+def _print_review_result(result: dict) -> bool:
+    score = result.get("score", 0)
+    status = result.get("status", "BLOCK")
+    summary = result.get("summary", "")
+    issues = result.get("issues", [])
+
+    print(f"\nArchitecture Score: {score}/100")
+    print(f"Summary: {summary}\n")
+
+    has_critical = False
+    for issue in issues:
+        severity = issue.get("severity", "INFO")
+        icon = "[CRIT]" if severity == "CRITICAL" else "[WARN]" if severity == "WARNING" else "[INFO]"
+        print(f"{icon} [{severity}] {issue.get('file', '?')}: {issue.get('message', '')}")
+        has_critical = has_critical or severity == "CRITICAL"
+
+    return status == "BLOCK" or score < 80 or has_critical
+
+
+class Reviewer:
+    """Architecture reviewer using LLM."""
+
+    def __init__(self, config: HippoConfig | None = None):
+        self.config = config or HippoConfig()
+        self.llm = HippoLLM(self.config)
+
+    def _get_staged_diff(self) -> str:
+        """Get git diff of staged changes."""
+        try:
+            result = subprocess.run(
+                ["git", "diff", "--staged"],
+                capture_output=True,
+                text=True,
+                check=True,
+            )
+            return result.stdout
+        except subprocess.CalledProcessError:
+            return ""
+
+    async def review_staged(self) -> int:
+        """Review staged changes. Returns exit code (0=Pass, 1=Fail)."""
+        diff = self._get_staged_diff()
+        if not diff.strip():
+            print("No staged changes to review.")
+            return 0
+
+        prompt = _build_review_prompt(_load_structure_map(), _truncate_diff(diff))
+        print("Reviewing architecture compliance...")
 
         try:
-            # We treat this as 'phase 1' or 'structure' prompt type for config purposes
-            # reusing an existing phase name if needed, or default
             response_text = await self.llm.call(
                 phase="review",
-                messages=[{"role": "user", "content": prompt}]
+                messages=[{"role": "user", "content": prompt}],
             )
-            
-            # Clean up potential markdown code blocks in response
-            if "```json" in response_text:
-                response_text = response_text.split("```json")[1].split("```")[0].strip()
-            elif "```" in response_text:
-                response_text = response_text.split("```")[1].split("```")[0].strip()
-
-            result = json.loads(response_text)
-            
-            score = result.get("score", 0)
-            status = result.get("status", "BLOCK")
-            summary = result.get("summary", "")
-            issues = result.get("issues", [])
-
-            print(f"
-🛡️  Architecture Score: {score}/100")
-            print(f"📝 Summary: {summary}
-")
-
-            has_critical = False
-            for issue in issues:
-                sev = issue.get("severity", "INFO")
-                icon = "🔴" if sev == "CRITICAL" else "⚠️ " if sev == "WARNING" else "ℹ️ "
-                print(f"{icon} [{sev}] {issue.get('file', '?')}: {issue.get('message', '')}")
-                if sev == "CRITICAL":
-                    has_critical = True
-
-            if status == "BLOCK" or (score < 80) or has_critical:
-                print("
-❌ Commit BLOCKED: Architectural violations detected.")
-                print("   To bypass (emergency only): git commit --no-verify")
-                return 1
-            
-            print("
-✅ Commit PASSED.")
-            return 0
-
+            result = json.loads(_strip_markdown_fences(response_text))
         except json.JSONDecodeError:
-            print(f"⚠️  Review failed to parse LLM response. Content:
-{response_text}")
-            # Fail safe: warning but allow commit? Or block? 
-            # Usually better to block if we promised a gatekeeper, 
-            # but for alpha tools, maybe allow with warning.
+            print(f"Review failed to parse LLM response. Content:\n{response_text}")
             print("   (Allowing commit due to tool error)")
             return 0
-        except Exception as e:
-            print(f"⚠️  Review tool error: {e}")
+        except Exception as exc:
+            print(f"Review tool error: {exc}")
             return 0
+
+        if _print_review_result(result):
+            print("\nCommit BLOCKED: Architectural violations detected.")
+            print("   To bypass (emergency only): git commit --no-verify")
+            return 1
+
+        print("\nCommit PASSED.")
+        return 0

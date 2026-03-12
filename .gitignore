@@ -4,15 +4,15 @@ __pycache__/
 *.egg-info/
 dist/
 build/
+docs/
+.claude/
+claude_skills/
+.mcp.json
 .ccb/
 tmp/
 .llmproxy/
 .aider.tags.cache.v4/
-
-# Hippocampus directory - ignore most files except config and structure
-.hippocampus/*
-!.hippocampus/config.yaml
-!.hippocampus/structure-prompt.md
-!.hippocampus/hippocampus-viz.html
-!.hippocampus/queries/
-!.hippocampus/queries/*.scm
+.aider.tags.cache.v101/
+.architec/
+.hippocampus/
+.pytest_cache/

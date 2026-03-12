@@ -1,0 +1,340 @@
+                            return `<b>${params.data.name}</b><br/>` +
+                                   `Module: ${params.data.module}<br/>` +
+                                   `Symbols: ${params.data.value}`;
+                        } else if (params.dataType === 'edge') {
+                            const dir = params.data.direction === 'upstream' ?
+                                '→ imports' : '→ depends on';
+                            return `${params.data.source.split('/').pop()} ${dir} ${params.data.target.split('/').pop()}`;
+                        }
+                    }
+                },
+                series: [{
+                    type: 'graph',
+                    layout: 'force',
+                    data: styledNodes,
+                    links: styledLinks,
+                    roam: true,
+                    draggable: true,
+                    force: {
+                        repulsion: 500,
+                        edgeLength: 150,
+                        gravity: 0.1
+                    },
+                    edgeSymbol: ['none', 'arrow'],
+                    edgeSymbolSize: [4, 10],
+                    label: {
+                        show: true,
+                        position: 'right',
+                        fontSize: 11
+                    },
+                    emphasis: {
+                        focus: 'adjacency',
+                        lineStyle: { width: 3 }
+                    }
+                }]
+            };
+
+            mainChart.setOption(option, true);
+
+            // Rebind click handler for focus graph nodes
+            mainChart.off('click');
+            mainChart.on('click', function(params) {
+                if (params.dataType === 'node') {
+                    const moduleId = params.data.module || 'unknown';
+                    const moduleName = moduleId.replace('mod:', '');
+                    showFileDetails(params.data, moduleName);
+                }
+            });
+
+            // Update breadcrumb and back button
+            updateBreadcrumb(['Module Graph', `File: ${fileName}`]);
+            showBackButton();
+        }
+
+        // Focus on function's 1-hop call graph
+        function focusFunctionGraph(centerFuncKey) {
+            const funcDeps = INDEX_DATA.function_dependencies || {};
+
+            // Check if data exists
+            if (Object.keys(funcDeps).length === 0) {
+                alert('Function dependencies data is empty. Please run: python -m hippocampus.cli index');
+                return;
+            }
+
+            // 1. Collect 1-hop neighbors
+            const relatedFuncs = new Set([centerFuncKey]);
+            const filteredLinks = [];
+
+            // Outgoing dependencies (functions this one calls)
+            const outgoing = funcDeps[centerFuncKey] || [];
+            outgoing.forEach(dep => {
+                relatedFuncs.add(dep.target);
+                filteredLinks.push({
+                    source: centerFuncKey,
+                    target: dep.target,
+                    value: dep.weight,
+                    direction: 'outgoing'
+                });
+            });
+
+            // Incoming dependencies (functions that call this one)
+            for (const [caller, deps] of Object.entries(funcDeps)) {
+                deps.forEach(dep => {
+                    if (dep.target === centerFuncKey) {
+                        relatedFuncs.add(caller);
+                        filteredLinks.push({
+                            source: caller,
+                            target: centerFuncKey,
+                            value: dep.weight,
+                            direction: 'incoming'
+                        });
+                    }
+                });
+            }
+
+            // 2. Build nodes (limit 20)
+            let nodes = Array.from(relatedFuncs).map(funcKey => {
+                const [filePath, funcName] = funcKey.split(':');
+                const fileInfo = INDEX_DATA.files[filePath] || {};
+
+                return {
+                    id: funcKey,
+                    name: funcName,
+                    file: filePath,
+                    module: fileInfo.module || 'unknown',
+                    symbolSize: funcKey === centerFuncKey ? 40 : 20,
+                    itemStyle: funcKey === centerFuncKey ?
+                        { color: '#ef4444', borderWidth: 3, borderColor: '#fee2e2' } :
+                        { color: '#64748B' }
+                };
+            });
+
+            if (nodes.length > 20) {
+                const centerNode = nodes.find(n => n.id === centerFuncKey);
+                const others = nodes.filter(n => n.id !== centerFuncKey).slice(0, 19);
+                nodes = [centerNode, ...others];
+            }
+
+            // Re-filter links after node truncation
+            const keptFuncIds = new Set(nodes.map(n => n.id));
+            const validFuncLinks = filteredLinks.filter(
+                link => keptFuncIds.has(link.source) && keptFuncIds.has(link.target)
+            );
+
+            // Handle empty neighbors
+            if (nodes.length <= 1 && validFuncLinks.length === 0) {
+                const funcName = centerFuncKey.split(':')[1];
+                mainChart.setOption({
+                    title: { text: `Function: ${funcName}`, subtext: 'No connected functions found', left: 20, top: 10, textStyle: { fontSize: 16, color: '#333' } },
+                    series: [{ type: 'graph', layout: 'force', data: nodes, links: [], roam: true, label: { show: true, fontSize: 10 } }]
+                }, true);
+                mainChart.off('click');
+                updateBreadcrumb(['Module Graph', `Function: ${funcName}`]);
+                showBackButton();
+                return;
+            }
+
+            // 3. Render
+            const funcName = centerFuncKey.split(':')[1];
+            const option = {
+                title: {
+                    text: `Function: ${funcName}`,
+                    subtext: `${nodes.length - 1} related functions`,
+                    left: 20,
+                    top: 10,
+                    textStyle: { fontSize: 16, color: '#333' }
+                },
+                tooltip: {
+                    backgroundColor: 'rgba(255, 255, 255, 0.9)',
+                    borderColor: '#E2E8F0',
+                    textStyle: { color: '#1E293B' },
+                    padding: 12,
+                    formatter: function(params) {
+                        if (params.dataType === 'node') {
+                            return `<b>${params.data.name}</b><br/>` +
+                                   `File: ${params.data.file}<br/>` +
+                                   `Module: ${params.data.module}`;
+                        } else if (params.dataType === 'edge') {
+                            const srcName = params.data.source.split(':')[1];
+                            const tgtName = params.data.target.split(':')[1];
+                            return `${srcName} → ${tgtName}<br/>Calls: ${params.data.value}`;
+                        }
+                    }
+                },
+                series: [{
+                    type: 'graph',
+                    layout: 'force',
+                    data: nodes,
+                    links: validFuncLinks.map(link => ({
+                        ...link,
+                        lineStyle: {
+                            width: Math.min(1 + link.value / 2, 4),
+                            color: link.direction === 'incoming' ? '#ef4444' : '#3b82f6',
+                            type: link.direction === 'incoming' ? 'dashed' : 'solid',
+                            opacity: 0.6
+                        }
+                    })),
+                    roam: true,
+                    draggable: true,
+                    force: {
+                        repulsion: 400,
+                        edgeLength: 120,
+                        gravity: 0.1
+                    },
+                    edgeSymbol: ['none', 'arrow'],
+                    edgeSymbolSize: [4, 8],
+                    label: {
+                        show: true,
+                        fontSize: 10
+                    },
+                    emphasis: {
+                        focus: 'adjacency',
+                        lineStyle: { width: 3 }
+                    }
+                }]
+            };
+
+            mainChart.setOption(option, true);
+
+            // Rebind click handler for function focus graph nodes
+            mainChart.off('click');
+            mainChart.on('click', function(params) {
+                if (params.dataType === 'node') {
+                    showFunctionDetails(params.data);
+                }
+            });
+
+            updateBreadcrumb(['Module Graph', `Function: ${funcName}`]);
+            showBackButton();
+        }
+
+        // Update breadcrumb navigation
+        function updateBreadcrumb(path) {
+            const breadcrumb = document.getElementById('breadcrumb');
+            breadcrumb.style.display = 'block';
+
+            let html = '<span style="cursor: pointer; color: #3b82f6;" onclick="switchView(\\x27modules\\x27, event); hideBreadcrumb();">🏠 Home</span>';
+
+            path.forEach((item, index) => {
+                html += ' <span style="color: #94a3b8;">›</span> ';
+                if (index === path.length - 1) {
+                    html += `<span style="color: #1e293b; font-weight: 600;">${item}</span>`;
+                } else {
+                    html += `<span style="cursor: pointer; color: #3b82f6;">${item}</span>`;
+                }
+            });
+
+            breadcrumb.innerHTML = html;
+        }
+
+        // Hide breadcrumb and back button
+        function hideBreadcrumb() {
+            document.getElementById('breadcrumb').style.display = 'none';
+            document.getElementById('backButton').style.display = 'none';
+        }
+
+        // Show back button
+        function showBackButton() {
+            document.getElementById('backButton').style.display = 'block';
+        }
+
+        // Go back to module view
+        function goBack() {
+            switchView('modules', null);
+            hideBreadcrumb();
+        }
+
+        // Open file in editor (new tab with file:// protocol)
+        function openFileInEditor(fileId) {
+            // Normalize file ID
+            const fileKey = fileId.startsWith('file:') ? fileId.slice(5) : fileId;
+            const file = INDEX_DATA.files[fileKey];
+            if (!file) {
+                console.warn('File not found for editor:', fileId);
+                return;
+            }
+
+            // Try to open with file:// protocol
+            const fileUrl = 'file://' + window.location.pathname.split('/.hippocampus/')[0] + '/' + fileKey;
+            window.open(fileUrl, '_blank');
+        }
+
+        // Load code preview
+        async function loadCodePreview(fileId) {
+            // Normalize file ID
+            const fileKey = fileId.startsWith('file:') ? fileId.slice(5) : fileId;
+            const file = INDEX_DATA.files[fileKey];
+            if (!file) {
+                console.warn('File not found for preview:', fileId);
+                return;
+            }
+
+            const previewDiv = document.getElementById('code-preview-container');
+            if (!previewDiv) {
+                console.warn('Preview container not found');
+                return;
+            }
+            previewDiv.innerHTML = '<p style="color: #999;">Loading...</p>';
+
+            try {
+                const fullPath = window.location.pathname.split('/.hippocampus/')[0] + '/' + fileKey;
+
+                const response = await fetch('file://' + fullPath);
+                const code = await response.text();
+
+                // Show first 50 lines
+                const lines = code.split('\\n').slice(0, 50);
+                const preview = lines.join('\\n');
+                const hasMore = code.split('\\n').length > 50;
+
+                previewDiv.innerHTML = `
+                    <pre style="background: #1E293B; color: #E2E8F0; padding: 12px; border-radius: 6px;
+                                overflow-x: auto; font-size: 11px; line-height: 1.5; max-height: 400px; overflow-y: auto;">` +
+                    escapeHtml(preview) +
+                    (hasMore ? '\\n\\n... (truncated, open in editor for full content)' : '') +
+                    `</pre>
+                `;
+            } catch (error) {
+                previewDiv.innerHTML = `
+                    <p style="color: #DC2626; background: #FEE2E2; padding: 10px; border-radius: 6px; font-size: 12px;">
+                        ⚠️ Cannot load file preview. Browser security restrictions prevent loading local files.
+                        <br><br>Click "Open in Editor" button to view the file.
+                    </p>
+                `;
+            }
+        }
+
+        // Escape HTML for safe display
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        // Render statistics
+        function renderStats() {
+            const stats = INDEX_DATA.stats || {};
+            const html = `
+                <div class="stat-item">
+                    <div class="stat-label">Total Files</div>
+                    <div class="stat-value">${stats.total_files || 0}</div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-label">Total Modules</div>
+                    <div class="stat-value">${stats.total_modules || 0}</div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-label">Total Lines</div>
+                    <div class="stat-value">${stats.total_lines || 0}</div>
+                </div>
+            `;
+            document.getElementById('stats-content').innerHTML = html;
+        }
+
+        // Initialize on load
+        window.onload = function() {
+            renderModulesGraph();
+            renderTrends();
+        };
+
+        // Handle window resize

@@ -33,6 +33,11 @@ hippo = "hippocampus.cli:cli"
 
 [tool.setuptools.packages.find]
 where = ["src"]
+include = ["hippocampus*"]
 
 [tool.setuptools.package-data]
-"hippocampus" = ["resources/queries/*.scm", "resources/prompts/*.md"]
+"hippocampus" = [
+    "resources/prompts/*.md",
+    "resources/queries/*.scm",
+    "resources/templates/*.html",
+]

@@ -186,6 +186,41 @@ def _classify_tier(score: float, test_file_ratio: float = 0.0) -> str:
     return "peripheral"
 
 
+def _group_files_by_module(files: dict[str, dict]) -> dict[str, list[tuple[str, dict]]]:
+    module_files: dict[str, list[tuple[str, dict]]] = {}
+    for fpath, fdata in files.items():
+        mid = fdata.get("module", "")
+        if mid:
+            module_files.setdefault(mid, []).append((fpath, fdata))
+    return module_files
+
+
+def _module_code_ratio(
+    module_files: list[tuple[str, dict]],
+    *,
+    total_signatures: int,
+) -> float:
+    mod_sigs = sum(len(f.get("signatures", [])) for _, f in module_files)
+    return mod_sigs / total_signatures if total_signatures else 0.0
+
+
+def _module_role_bonus(module_files: list[tuple[str, dict]]) -> float:
+    if not module_files:
+        return 0.0
+    bonuses = [_file_role_bonus(f.get("tags", [])) for _, f in module_files]
+    return sum(bonuses) / len(bonuses)
+
+
+def _module_test_ratio(module_files: list[tuple[str, dict]]) -> float:
+    if not module_files:
+        return 0.0
+    test_file_count = sum(
+        1 for fp, fd in module_files
+        if _classify_file_viz_role(fp, fd) == "test"
+    )
+    return test_file_count / len(module_files)
+
+
 def compute_module_scores(index: dict[str, Any]) -> dict[str, Any]:
     """Compute core_score and tier for each module in the index.
 
@@ -200,42 +235,18 @@ def compute_module_scores(index: dict[str, Any]) -> dict[str, Any]:
 
     total_files = len(files)
     total_sigs = sum(len(f.get("signatures", [])) for f in files.values())
-
-    # Group files by module: mid → [(file_path, file_data), ...]
-    module_files: dict[str, list[tuple[str, dict]]] = {}
-    for fpath, fdata in files.items():
-        mid = fdata.get("module", "")
-        if mid:
-            module_files.setdefault(mid, []).append((fpath, fdata))
+    module_files = _group_files_by_module(files)
 
     for mod in modules:
         mid = mod["id"]
         mfiles = module_files.get(mid, [])
-
-        # file_ratio: fraction of project files in this module
         file_ratio = len(mfiles) / total_files if total_files else 0.0
-
-        # code_ratio: fraction of total signatures in this module
-        mod_sigs = sum(len(f.get("signatures", [])) for _, f in mfiles)
-        code_ratio = mod_sigs / total_sigs if total_sigs else 0.0
-
-        # role_bonus: average of per-file role bonuses
-        if mfiles:
-            bonuses = [_file_role_bonus(f.get("tags", [])) for _, f in mfiles]
-            role_bonus = sum(bonuses) / len(bonuses)
-        else:
-            role_bonus = 0.0
+        code_ratio = _module_code_ratio(mfiles, total_signatures=total_sigs)
+        role_bonus = _module_role_bonus(mfiles)
 
         score = 0.45 * code_ratio + 0.10 * file_ratio + 0.45 * role_bonus
-        # Normalize: cap at 1.0 (shouldn't exceed, but be safe)
         score = min(score, 1.0)
-
-        # Calculate test file ratio for safety rule (consistent with path-driven role)
-        test_file_count = sum(
-            1 for fp, fd in mfiles
-            if _classify_file_viz_role(fp, fd) == "test"
-        )
-        test_file_ratio = test_file_count / len(mfiles) if mfiles else 0.0
+        test_file_ratio = _module_test_ratio(mfiles)
 
         mod["core_score"] = round(score, 4)
         mod["tier"] = _classify_tier(score, test_file_ratio)

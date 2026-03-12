@@ -30,12 +30,18 @@ def build_openai_headers(provider: dict[str, Any]) -> dict[str, str]:
     api_key = str(provider.get("api_key", "") or "").strip()
     if api_key:
         headers["authorization"] = f"Bearer {api_key}"
-    raw_headers = provider.get("headers", {}) or {}
-    if isinstance(raw_headers, dict):
-        for key, value in raw_headers.items():
-            if isinstance(key, str) and isinstance(value, str) and key.strip():
-                headers[key] = value
+    headers.update(_normalized_headers(provider.get("headers", {}) or {}))
     return headers
+
+
+def _normalized_headers(raw_headers: Any) -> dict[str, str]:
+    if not isinstance(raw_headers, dict):
+        return {}
+    return {
+        key: value
+        for key, value in raw_headers.items()
+        if isinstance(key, str) and isinstance(value, str) and key.strip()
+    }
 
 
 def build_anthropic_headers(provider: dict[str, Any]) -> dict[str, str]:
@@ -59,29 +65,37 @@ def build_openai_responses_payload(
     instructions_parts: list[str] = []
     input_items: list[dict[str, Any]] = []
     for msg in messages:
-        role = str(msg.get("role", "user") or "user").strip().lower()
-        content = str(msg.get("content", "") or "")
+        role, content = _normalized_message(msg)
         if role == "system":
             if content:
                 instructions_parts.append(content)
             continue
-        normalized = role if role in {"user", "assistant", "developer"} else "user"
-        input_items.append(
-            {
-                "role": normalized,
-                "content": [{"type": "input_text", "text": content}],
-            }
-        )
+        input_items.append(_input_message(role, content))
+
     payload: dict[str, Any] = {
         "model": model,
-        "input": input_items or [{"role": "user", "content": [{"type": "input_text", "text": ""}]}],
+        "input": input_items or [_input_message("user", "")],
         "max_output_tokens": int(max_tokens),
         "temperature": float(temperature),
     }
-    instructions = "\n\n".join(x for x in instructions_parts if x.strip()).strip()
+    instructions = "\n\n".join(part for part in instructions_parts if part.strip()).strip()
     if instructions:
         payload["instructions"] = instructions
     return payload
+
+
+def _normalized_message(message: dict[str, str]) -> tuple[str, str]:
+    role = str(message.get("role", "user") or "user").strip().lower()
+    content = str(message.get("content", "") or "")
+    return role, content
+
+
+def _input_message(role: str, content: str) -> dict[str, Any]:
+    normalized = role if role in {"user", "assistant", "developer"} else "user"
+    return {
+        "role": normalized,
+        "content": [{"type": "input_text", "text": content}],
+    }
 
 
 def build_anthropic_payload(
@@ -92,17 +106,16 @@ def build_anthropic_payload(
     temperature: float,
 ) -> dict[str, Any]:
     system_parts: list[str] = []
-    convo: list[dict[str, str]] = []
+    conversation: list[dict[str, str]] = []
     for msg in messages:
-        role = str(msg.get("role", "user") or "user")
-        content = str(msg.get("content", "") or "")
+        role, content = _normalized_message(msg)
         if role == "system":
             system_parts.append(content)
             continue
-        convo.append({"role": role, "content": content})
+        conversation.append({"role": role, "content": content})
     payload: dict[str, Any] = {
         "model": model,
-        "messages": convo or [{"role": "user", "content": ""}],
+        "messages": conversation or [{"role": "user", "content": ""}],
         "max_tokens": int(max_tokens),
         "temperature": float(temperature),
     }

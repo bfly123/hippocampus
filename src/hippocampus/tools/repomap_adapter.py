@@ -1,11 +1,11 @@
-"""Adapter layer for integrating Aider RepoMap into Hippocampus."""
+"""Adapter layer for integrating embedded RepoMap into Hippocampus."""
 
 from __future__ import annotations
 
-import sys
 from pathlib import Path
 from typing import Any, List, Set, Tuple
 
+from .._vendor.aider_mini import RepoMap
 from ..utils import estimate_tokens
 from .repomap_availability import check_repomap_available
 from .repomap_snippet_extractor import extract_ranked_snippets
@@ -71,37 +71,6 @@ class HippoRepoMap:
         self.verbose = verbose
         self.index_files = index_files or set()
 
-        pkg_root = Path(__file__).resolve().parent.parent.parent.parent
-        vendor_path = pkg_root / "vendor" / "aider"
-
-        if not vendor_path.exists():
-            import os
-
-            if os.environ.get("HIPPO_ALLOW_TARGET_VENDOR") == "1":
-                vendor_path = self.root / "vendor" / "aider"
-                if not vendor_path.exists():
-                    raise ImportError(
-                        "Aider vendor not found in package or target repo. "
-                        "Install with: pip install -e '.[repomap]'"
-                    )
-            else:
-                raise ImportError(
-                    "Aider vendor not found in package. "
-                    "Install with: pip install -e '.[repomap]'"
-                )
-
-        if str(vendor_path) not in sys.path:
-            sys.path.insert(0, str(vendor_path))
-
-        try:
-            from aider.repomap import RepoMap
-        except ImportError as exc:
-            raise ImportError(
-                "Failed to import Aider RepoMap. "
-                "Install optional dependencies: pip install -e '.[repomap]'\n"
-                f"Error: {exc}"
-            )
-
         self.io = HippoIO(verbose=verbose)
         self.model = HippoModel()
         self.repomap = RepoMap(
@@ -112,43 +81,49 @@ class HippoRepoMap:
             verbose=verbose,
         )
 
+    def _normalize_repo_path(self, raw: str) -> str | None:
+        if not raw or not isinstance(raw, str):
+            return None
+
+        normalized_raw = raw.replace("\\", "/").lstrip("/")
+        if Path(normalized_raw).is_absolute():
+            return None
+        if ".." in normalized_raw.split("/"):
+            return None
+
+        try:
+            return str(Path(normalized_raw).as_posix())
+        except (ValueError, RuntimeError):
+            return None
+
+    def _is_indexed_path(self, normalized: str) -> bool:
+        if not self.index_files:
+            return True
+        normalized_lower = normalized.lower()
+        return any(
+            idx_file.lower() == normalized_lower
+            for idx_file in self.index_files
+        )
+
+    def _resolve_repo_path(self, normalized: str) -> bool:
+        try:
+            full_path = (self.root / normalized).resolve()
+        except (ValueError, RuntimeError):
+            return False
+        return full_path.is_relative_to(self.root)
+
     def _validate_repo_paths(self, files: list[str]) -> list[str]:
         """Validate and filter file paths to ensure they are within the repo."""
         validated = []
-        root_resolved = self.root
 
         for raw in files:
-            if not raw or not isinstance(raw, str):
+            normalized = self._normalize_repo_path(raw)
+            if normalized is None:
                 continue
-
-            normalized_raw = raw.replace("\\", "/").lstrip("/")
-
-            if Path(normalized_raw).is_absolute():
+            if not self._is_indexed_path(normalized):
                 continue
-
-            if ".." in normalized_raw.split("/"):
+            if not self._resolve_repo_path(normalized):
                 continue
-
-            try:
-                normalized = str(Path(normalized_raw).as_posix())
-            except (ValueError, RuntimeError):
-                continue
-
-            if self.index_files:
-                normalized_lower = normalized.lower()
-                if not any(
-                    idx_file.lower() == normalized_lower
-                    for idx_file in self.index_files
-                ):
-                    continue
-
-            try:
-                full_path = (root_resolved / normalized).resolve()
-                if not full_path.is_relative_to(root_resolved):
-                    continue
-            except (ValueError, RuntimeError):
-                continue
-
             validated.append(normalized)
 
         return validated

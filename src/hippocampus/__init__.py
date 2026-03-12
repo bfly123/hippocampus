@@ -1,5 +1,10 @@
 """Hippocampus — Code repository indexing and analysis toolkit."""
 
+from __future__ import annotations
+
+import sys
+from importlib import import_module
+
 __version__ = "0.1.0"
 
 from .api import (
@@ -42,3 +47,22 @@ __all__ = [
     "summarize_project_index",
     "summarize_project_report",
 ]
+
+_LEGACY_MODULE_ALIASES = {
+    "hippocampus.resource_paths": "hippocampus.integration.resource_paths",
+    "hippocampus.api_support": "hippocampus.api.support",
+    "hippocampus.cli_architect": "hippocampus.cli.architect",
+    "hippocampus.cli_architect_commands": "hippocampus.cli.architect_commands",
+    "hippocampus.cli_architect_reports": "hippocampus.cli.architect_reports",
+    "hippocampus.cli_commands_core": "hippocampus.cli.commands_core",
+    "hippocampus.cli_commands_pipeline": "hippocampus.cli.commands_pipeline",
+    "hippocampus.cli_commands_project_bootstrap": "hippocampus.cli.commands_project_bootstrap",
+    "hippocampus.cli_commands_structure_prompt": "hippocampus.cli.commands_structure_prompt",
+    "hippocampus.cli_pipeline_command_builders": "hippocampus.cli.pipeline_command_builders",
+    "hippocampus.cli_pipeline_helpers": "hippocampus.cli.pipeline_helpers",
+    "hippocampus.cli_query": "hippocampus.cli.query",
+    "hippocampus.cli_snapshot": "hippocampus.cli.snapshot",
+}
+
+for legacy_name, current_name in _LEGACY_MODULE_ALIASES.items():
+    sys.modules.setdefault(legacy_name, import_module(current_name))

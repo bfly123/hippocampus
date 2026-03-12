@@ -5,7 +5,7 @@ Code repository indexing and navigation toolkit.
 ## Install
 
 ```bash
-./scripts/install.sh
+./install.sh
 ```
 
 This installs `hippocampus` from the current source checkout into the active

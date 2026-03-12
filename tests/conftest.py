@@ -3,10 +3,10 @@
 from __future__ import annotations
 
 import json
-import shutil
 from pathlib import Path
 
 import pytest
+from hippocampus.resources import copy_packaged_queries
 
 # Target codebase for system tests
 TARGET_CODEBASE = Path.home() / "yunwei" / "claude_codex"
@@ -37,13 +37,9 @@ def tmp_project(tmp_path):
 
 @pytest.fixture
 def queries_dir(tmp_output):
-    """Copy vendor .scm query files into tmp output for tests."""
-    vendor_src = Path.home() / "workspace" / "hippocampus" / "vendor" / "aider" / "aider" / "queries" / "tree-sitter-languages"
+    """Copy packaged .scm query files into tmp output for tests."""
     dst = tmp_output / "queries"
-    dst.mkdir(exist_ok=True)
-    if vendor_src.is_dir():
-        for scm in vendor_src.glob("*.scm"):
-            shutil.copy2(scm, dst / scm.name)
+    copy_packaged_queries(dst)
     return dst
 
 

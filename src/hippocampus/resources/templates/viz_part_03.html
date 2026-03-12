@@ -1,0 +1,340 @@
+                diff.added.forEach(id => {
+                    const module = SNAPSHOTS_DATA.frames[index].modules.find(m => m.id === id);
+                    if (module) {
+                        html += `<div class="change-item">${module.name}</div>`;
+                    }
+                });
+            }
+
+            if (diff.removed.length > 0) {
+                html += '<h4 style="color: #EF4444; margin-top: 15px; font-size: 14px;">🔴 Removed Modules</h4>';
+                diff.removed.forEach(id => {
+                    html += `<div class="change-item">${id.replace('mod:', '')}</div>`;
+                });
+            }
+
+            if (diff.changed.length > 0) {
+                html += '<h4 style="color: #3B82F6; margin-top: 15px; font-size: 14px;">🔵 Changed Modules</h4>';
+                diff.changed.forEach(change => {
+                    const tierInfo = change.tier_change ? `<br><small>Tier: ${change.tier_change}</small>` : '';
+                    const roleInfo = change.role_change ? `<br><small>Role: ${change.role_change}</small>` : '';
+                    const scoreInfo = Math.abs(change.score_delta) > 0.01 ?
+                        `<br><small>Score: ${change.score_delta > 0 ? '+' : ''}${change.score_delta.toFixed(3)}</small>` : '';
+                    html += `<div class="change-item">
+                        ${change.id.replace('mod:', '')}${roleInfo}${tierInfo}${scoreInfo}
+                    </div>`;
+                });
+            }
+
+            if (diff.added.length === 0 && diff.removed.length === 0 && diff.changed.length === 0) {
+                html += '<p style="color: #999; margin-top: 15px;">No changes detected</p>';
+            }
+
+            document.getElementById('details-content').innerHTML = html;
+        }
+
+        // Render trends chart
+        function renderTrends() {
+            const option = {
+                title: {
+                    text: 'Historical Trends (Click to view snapshot)',
+                    left: 'center',
+                    top: 10,
+                    textStyle: { fontSize: 14, color: '#64748B' }
+                },
+                tooltip: {
+                    trigger: 'axis',
+                    formatter: function(params) {
+                        let result = params[0].name + '<br/>';
+                        params.forEach(p => {
+                            result += p.marker + p.seriesName + ': ' + p.value + '<br/>';
+                        });
+                        result += '<i style="color: #999;">Click to view this snapshot</i>';
+                        return result;
+                    }
+                },
+                legend: { data: ['Files', 'Modules'], bottom: 10 },
+                grid: { left: 50, right: 50, top: 50, bottom: 50 },
+                xAxis: {
+                    type: 'category',
+                    data: TRENDS.dates.map((d, i) => {
+                        // Format date display
+                        return d.substring(0, 13).replace('T', ' ');
+                    })
+                },
+                yAxis: { type: 'value' },
+                series: [
+                    {
+                        name: 'Files',
+                        type: 'line',
+                        data: TRENDS.file_counts,
+                        smooth: true
+                    },
+                    {
+                        name: 'Modules',
+                        type: 'line',
+                        data: TRENDS.module_counts,
+                        smooth: true
+                    }
+                ]
+            };
+            trendsChart.setOption(option);
+
+            // Add click event
+            trendsChart.off('click');
+            trendsChart.on('click', function(params) {
+                if (params.componentType === 'series') {
+                    const snapshotIndex = params.dataIndex;
+                    if (SNAPSHOTS_DATA.frames[snapshotIndex]) {
+                        renderSnapshot(snapshotIndex);
+                        renderDiffSidebar(snapshotIndex);
+                    }
+                }
+            });
+        }
+
+        // Show module details in sidebar
+        function showModuleDetails(moduleData) {
+            const moduleDeps = INDEX_DATA.module_dependencies || {};
+            const myDeps = moduleDeps[moduleData.id] || [];
+
+            // Get files for this module (handle both static and snapshot modes)
+            let moduleFiles = [];
+            if (moduleData.files && Array.isArray(moduleData.files)) {
+                // Static mode: files are embedded in node data
+                moduleFiles = moduleData.files;
+            } else {
+                // Snapshot mode: need to fetch from INDEX_DATA
+                const allFiles = INDEX_DATA.files || {};
+                const fileDeps = INDEX_DATA.file_dependencies || {};
+
+                for (const [filePath, fileInfo] of Object.entries(allFiles)) {
+                    if (fileInfo.module === moduleData.id) {
+                        moduleFiles.push({
+                            path: filePath,
+                            name: fileInfo.name || filePath.split('/').pop(),
+                            desc: fileInfo.desc || '',
+                            signatures: fileInfo.signatures || [],
+                            dependencies: fileDeps[filePath] || []
+                        });
+                    }
+                }
+            }
+
+            // Breadcrumb navigation
+            let html = `
+                <div style="padding: 10px 0; margin-bottom: 15px; border-bottom: 1px solid #e5e7eb;">
+                    <div style="font-size: 12px; color: #64748b;">
+                        <span style="cursor: pointer; color: #3b82f6;" onclick="switchView('modules', event)">🏠 Home</span>
+                        <span style="margin: 0 6px;">›</span>
+                        <span style="color: #1e293b; font-weight: 600;">${moduleData.name}</span>
+                    </div>
+                </div>
+                <h3 style="color: #333; margin-bottom: 10px;">${moduleData.name}</h3>
+                <p style="color: #666; font-size: 14px; margin-bottom: 15px;">${moduleData.desc || ''}</p>
+                <div class="stat-item">
+                    <div class="stat-label">Role</div>
+                    <div class="stat-value">${moduleData.role || moduleData.category}</div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-label">Core Score</div>
+                    <div class="stat-value">${moduleData.core_score.toFixed(3)}</div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-label">Files</div>
+                    <div class="stat-value">${moduleFiles.length}</div>
+                </div>
+            `;
+
+            // Show module dependencies
+            if (myDeps.length > 0) {
+                html += `
+                    <h4 style="margin-top: 20px; margin-bottom: 10px; color: #475569;">
+                        Dependencies (${myDeps.length})
+                    </h4>
+                    <div style="margin-bottom: 15px;">
+                `;
+                myDeps.forEach(dep => {
+                    const targetName = dep.target.replace('mod:', '');
+                    html += `
+                        <div style="padding: 6px 10px; margin-bottom: 4px; background: #f1f5f9;
+                                    border-left: 3px solid #64748b; border-radius: 3px; font-size: 12px;">
+                            <span style="color: #334155;">→ ${targetName}</span>
+                            <span style="color: #94a3b8; margin-left: 8px;">(${dep.weight} imports)</span>
+                        </div>
+                    `;
+                });
+                html += '</div>';
+            }
+
+            // Show files in module
+            html += `
+                <h4 style="margin-top: 20px; margin-bottom: 10px; color: #475569;">
+                    Files (${moduleFiles.length})
+                </h4>
+                <div style="max-height: 400px; overflow-y: auto;">
+            `;
+
+            moduleFiles.forEach(file => {
+                const depCount = file.dependencies ? file.dependencies.length : 0;
+                const sigCount = file.signatures ? file.signatures.length : 0;
+                html += `
+                    <div class="file-item" data-file-path="${file.path}"
+                         style="padding: 10px; margin-bottom: 6px; background: #f9fafb;
+                                border: 1px solid #e5e7eb; border-radius: 4px; cursor: pointer;
+                                transition: all 0.2s;">
+                        <div style="font-weight: 600; font-size: 13px; color: #1e293b; margin-bottom: 4px;">
+                            📄 ${file.name}
+                        </div>
+                        <div style="font-size: 11px; color: #64748b; margin-bottom: 4px;">
+                            ${file.desc || 'No description'}
+                        </div>
+                        <div style="font-size: 11px; color: #94a3b8;">
+                            ${sigCount} symbols · ${depCount} dependencies
+                        </div>
+                    </div>
+                `;
+            });
+
+            html += '</div>';
+            document.getElementById('details-content').innerHTML = html;
+
+            // Add hover effect and click event listeners to file items
+            document.querySelectorAll('.file-item').forEach((item, index) => {
+                item.addEventListener('mouseenter', function() {
+                    this.style.background = '#e0f2fe';
+                    this.style.borderColor = '#0ea5e9';
+                });
+                item.addEventListener('mouseleave', function() {
+                    this.style.background = '#f9fafb';
+                    this.style.borderColor = '#e5e7eb';
+                });
+                item.addEventListener('click', function() {
+                    const filePath = this.getAttribute('data-file-path');
+                    const fileData = moduleFiles.find(f => f.path === filePath);
+                    if (fileData) {
+                        showFileDetails(fileData, moduleData.name);
+                    }
+                });
+            });
+        }
+
+        // Show file details with code signatures
+        function showFileDetails(fileData, moduleName, options) {
+            var opts = options || {};
+            // Store current module in view stack for back navigation (skip when navigating back)
+            if (!opts.skipPush) {
+                viewStack.push({ type: 'module', name: moduleName });
+            }
+
+            // Breadcrumb navigation
+            let html = `
+                <div style="padding: 10px 0; margin-bottom: 15px; border-bottom: 1px solid #e5e7eb;">
+                    <div style="font-size: 12px; color: #64748b;">
+                        <span style="cursor: pointer; color: #3b82f6;" onclick="switchView('modules', event)">🏠 Home</span>
+                        <span style="margin: 0 6px;">›</span>
+                        <span id="breadcrumb-module" style="cursor: pointer; color: #3b82f6;">${moduleName}</span>
+                        <span style="margin: 0 6px;">›</span>
+                        <span style="color: #1e293b; font-weight: 600;">${fileData.name}</span>
+                    </div>
+                </div>
+                <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 15px;">
+                    <div>
+                        <h3 style="color: #333; margin-bottom: 5px;">📄 ${fileData.name}</h3>
+                        <div style="font-size: 11px; color: #64748b;">${fileData.path}</div>
+                    </div>
+                    <button class="focus-file-btn" data-file-path="${fileData.path.replace(/"/g, '&quot;')}"
+                            style="background: #eff6ff; color: #3b82f6; border: 1px solid #bfdbfe;
+                                   padding: 6px 12px; border-radius: 6px; cursor: pointer; font-size: 12px;">
+                        🔍 Focus Graph
+                    </button>
+                </div>
+                <p style="color: #666; font-size: 14px; margin-bottom: 15px;">${fileData.desc || 'No description'}</p>
+                <div class="stat-item">
+                    <div class="stat-label">Path</div>
+                    <div class="stat-value" style="font-size: 11px; word-break: break-all;">${fileData.path}</div>
+                </div>
+            `;
+
+            // Show file dependencies
+            if (fileData.dependencies && fileData.dependencies.length > 0) {
+                html += `
+                    <h4 style="margin-top: 20px; margin-bottom: 10px; color: #475569;">
+                        Dependencies (${fileData.dependencies.length})
+                    </h4>
+                    <div style="max-height: 200px; overflow-y: auto; margin-bottom: 15px;">
+                `;
+                fileData.dependencies.forEach(dep => {
+                    const depName = dep.split('/').pop();
+                    html += `
+                        <div style="padding: 6px 10px; margin-bottom: 4px; background: #fef3c7;
+                                    border-left: 3px solid #f59e0b; border-radius: 3px; font-size: 11px;">
+                            <div style="color: #92400e; font-weight: 500;">${depName}</div>
+                            <div style="color: #b45309; font-size: 10px;">${dep}</div>
+                        </div>
+                    `;
+                });
+                html += '</div>';
+            }
+
+            // Show code signatures
+            if (fileData.signatures && fileData.signatures.length > 0) {
+                // Pre-build reverse index for incoming dependency lookup
+                const funcDepsMap = INDEX_DATA.function_dependencies || {};
+                const incomingTargets = new Set();
+                for (const deps of Object.values(funcDepsMap)) {
+                    for (const d of deps) {
+                        incomingTargets.add(d.target);
+                    }
+                }
+
+                html += `
+                    <h4 style="margin-top: 20px; margin-bottom: 10px; color: #475569;">
+                        Symbols (${fileData.signatures.length})
+                    </h4>
+                    <div style="max-height: 300px; overflow-y: auto;">
+                `;
+
+                fileData.signatures.forEach((sig, sigIndex) => {
+                    const kindColor = {
+                        'class': '#3b82f6',
+                        'function': '#8b5cf6',
+                        'method': '#ec4899',
+                        'variable': '#10b981'
+                    }[sig.kind] || '#6b7280';
+
+                    const isFunction = sig.kind === 'function' || sig.kind === 'method';
+                    const funcKey = `${fileData.path}:${sig.name}`;
+                    const hasOutgoing = isFunction && funcDepsMap[funcKey];
+                    const hasIncoming = isFunction && incomingTargets.has(funcKey);
+                    const hasDeps = hasOutgoing || hasIncoming;
+
+                    const clickableClass = isFunction ? 'symbol-row-clickable' : '';
+                    const clickableAttr = isFunction ? `data-sig-index="${sigIndex}"` : '';
+
+                    html += `
+                        <div class="${clickableClass}" ${clickableAttr}
+                             style="padding: 8px 10px; margin-bottom: 5px; background: #f9fafb;
+                                    border-left: 3px solid ${kindColor}; border-radius: 4px; font-family: 'Courier New', monospace;
+                                    ${isFunction ? 'cursor: pointer; transition: background 0.15s, border-color 0.15s;' : ''}">
+                            <div style="display: flex; align-items: center; gap: 8px;">
+                                <span style="color: ${kindColor}; font-weight: 600; font-size: 11px; text-transform: uppercase;">
+                                    ${sig.kind}
+                                </span>
+                                <span style="color: #1e293b; font-weight: 500; font-size: 13px;">
+                                    ${sig.name}
+                                </span>
+                                <span style="color: #94a3b8; font-size: 11px; margin-left: auto;">
+                                    line ${sig.line}
+                                </span>
+                                ${hasDeps ? `
+                                    <button class="focus-func-btn" data-func-key="${funcKey.replace(/"/g, '&quot;')}"
+                                            style="background: none; border: none; cursor: pointer;
+                                                   color: #3b82f6; font-size: 14px; padding: 0 4px;"
+                                            title="View call graph">
+                                        🕸️
+                                    </button>
+                                ` : ''}
+                            </div>
+                            ${sig.desc ? `<div style="color: #64748b; font-size: 11px; margin-top: 4px; font-family: system-ui;">${sig.desc}</div>` : ''}
+                        </div>

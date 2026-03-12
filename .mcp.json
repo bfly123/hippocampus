@@ -1,8 +1,0 @@
-{
-  "mcpServers": {
-    "puppeteer": {
-      "command": "node",
-      "args": ["/home/bfly/.nvm/versions/node/v22.20.0/lib/node_modules/@modelcontextprotocol/server-puppeteer/dist/index.js"]
-    }
-  }
-}

@@ -22,6 +22,54 @@ def _try_parse_json(text: str) -> tuple[dict | list | None, str | None]:
         return None, f"JSON parse error: {e}"
 
 
+def _validate_phase_1_desc(data: dict, errors: list[str]) -> None:
+    if "desc" not in data:
+        errors.append("Missing 'desc' field")
+    elif len(data["desc"]) > 50:
+        pass  # Truncate silently, don't retry
+
+
+def _validate_phase_1_tags(
+    data: dict,
+    errors: list[str],
+    vocab: TagVocab | None,
+) -> None:
+    tags = data.get("tags")
+    if tags is None:
+        errors.append("Missing 'tags' field")
+        return
+    if not isinstance(tags, list):
+        errors.append("'tags' must be an array")
+        return
+    if vocab is None:
+        return
+
+    from ..tag_vocab import is_valid_new_tag
+
+    for tag in tags:
+        if not vocab.contains(tag) and not is_valid_new_tag(tag):
+            errors.append(f"Tag '{tag}' not in vocab and invalid as new tag")
+
+
+def _validate_phase_1_signatures(
+    data: dict,
+    errors: list[str],
+    expected_sig_count: int,
+) -> None:
+    signatures = data.get("signatures")
+    if signatures is None:
+        errors.append("Missing 'signatures' field")
+        return
+    if not isinstance(signatures, list):
+        errors.append("'signatures' must be an array")
+        return
+    if len(signatures) != expected_sig_count:
+        errors.append(
+            f"signatures count {len(signatures)} "
+            f"!= expected {expected_sig_count}"
+        )
+
+
 def validate_phase_1(
     text: str,
     expected_sig_count: int,
@@ -40,32 +88,9 @@ def validate_phase_1(
     if not isinstance(data, dict):
         return ["Output must be a JSON object"]
 
-    if "desc" not in data:
-        errors.append("Missing 'desc' field")
-    elif len(data["desc"]) > 50:
-        pass  # Truncate silently, don't retry
-
-    if "tags" not in data:
-        errors.append("Missing 'tags' field")
-    elif not isinstance(data["tags"], list):
-        errors.append("'tags' must be an array")
-    elif vocab is not None:
-        from ..tag_vocab import is_valid_new_tag
-        for tag in data["tags"]:
-            if not vocab.contains(tag) and not is_valid_new_tag(tag):
-                errors.append(
-                    f"Tag '{tag}' not in vocab and invalid as new tag"
-                )
-
-    if "signatures" not in data:
-        errors.append("Missing 'signatures' field")
-    elif not isinstance(data["signatures"], list):
-        errors.append("'signatures' must be an array")
-    elif len(data["signatures"]) != expected_sig_count:
-        errors.append(
-            f"signatures count {len(data['signatures'])} "
-            f"!= expected {expected_sig_count}"
-        )
+    _validate_phase_1_desc(data, errors)
+    _validate_phase_1_tags(data, errors, vocab)
+    _validate_phase_1_signatures(data, errors, expected_sig_count)
 
     return errors
 

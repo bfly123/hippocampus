@@ -43,9 +43,9 @@ def test_symbol_ranker_rank_files_basic():
     
     # Test with actual project files
     files = [
-        "src/hippocampus/cli.py",
-        "src/hippocampus/utils.py",
-        "src/hippocampus/constants.py",
+        "hippocampus/cli.py",
+        "hippocampus/utils.py",
+        "hippocampus/constants.py",
     ]
     
     ranked = ranker.rank_files(files)
@@ -78,17 +78,17 @@ def test_symbol_ranker_focus_files():
     ranker = SymbolRanker(root, verbose=False)
 
     files = [
-        "src/hippocampus/cli.py",
-        "src/hippocampus/utils.py",
-        "src/hippocampus/constants.py",
+        "hippocampus/cli.py",
+        "hippocampus/utils.py",
+        "hippocampus/constants.py",
     ]
 
     # Rank with focus on utils.py
-    ranked_with_focus = ranker.rank_files(files, focus_files=["src/hippocampus/utils.py"])
+    ranked_with_focus = ranker.rank_files(files, focus_files=["hippocampus/utils.py"])
 
     # Focus file should be in top 2 (allowing for hybrid scoring effects)
     ranked_files = [f for f, _ in ranked_with_focus]
-    focus_position = ranked_files.index("src/hippocampus/utils.py")
+    focus_position = ranked_files.index("hippocampus/utils.py")
 
     assert focus_position < 2, \
         f"Focus file should be in top 2, but was at position {focus_position}"
@@ -107,8 +107,8 @@ def test_symbol_ranker_deterministic():
     ranker = SymbolRanker(root, verbose=False)
     
     files = [
-        "src/hippocampus/cli.py",
-        "src/hippocampus/utils.py",
+        "hippocampus/cli.py",
+        "hippocampus/utils.py",
     ]
     
     # Run multiple times

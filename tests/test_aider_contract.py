@@ -95,8 +95,8 @@ def test_hippo_repomap_get_ranked_tags():
     repomap = HippoRepoMap(root=root, map_tokens=1024, verbose=False)
     
     # Test with actual project files
-    chat_files = ["src/hippocampus/utils.py"]
-    other_files = ["src/hippocampus/constants.py"]
+    chat_files = ["hippocampus/utils.py"]
+    other_files = ["hippocampus/constants.py"]
     
     ranked_tags = repomap.get_ranked_tags(
         chat_files=chat_files,
@@ -129,8 +129,8 @@ def test_repomap_determinism():
     root = Path.cwd()
     repomap = HippoRepoMap(root=root, map_tokens=1024, verbose=False)
     
-    chat_files = ["src/hippocampus/utils.py"]
-    other_files = ["src/hippocampus/constants.py"]
+    chat_files = ["hippocampus/utils.py"]
+    other_files = ["hippocampus/constants.py"]
     
     # Run twice
     result1 = repomap.get_ranked_tags(
@@ -164,8 +164,8 @@ def test_repomap_path_handling():
     repomap = HippoRepoMap(root=root, map_tokens=1024, verbose=False)
     
     # Test with relative paths (should work)
-    chat_files = ["src/hippocampus/utils.py"]
-    other_files = ["src/hippocampus/constants.py"]
+    chat_files = ["hippocampus/utils.py"]
+    other_files = ["hippocampus/constants.py"]
     
     result = repomap.get_ranked_tags(
         chat_files=chat_files,

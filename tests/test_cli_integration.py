@@ -51,10 +51,10 @@ class TestCliHelp:
         assert result.exit_code == 0
         assert "--no-llm" not in result.output
 
-    def test_hooks_help(self, runner):
+    def test_hooks_command_removed(self, runner):
         result = runner.invoke(cli, ["hooks", "--help"])
-        assert result.exit_code == 0
-        assert "install" in result.output
+        assert result.exit_code != 0
+        assert "No such command 'hooks'" in result.output
 
     def test_memory_command_removed(self, runner):
         result = runner.invoke(cli, ["memory", "--help"])

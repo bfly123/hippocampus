@@ -1,0 +1,340 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Hippocampus Visualization</title>
+    <script src="https://cdn.jsdelivr.net/npm/echarts@5.4.3/dist/echarts.min.js"></script>
+    <style>
+        :root {
+            --bg-app: #F8FAFC;
+            --bg-card: #FFFFFF;
+            --text-primary: #1E293B;
+            --text-secondary: #64748B;
+            --accent: #4F46E5;
+            --shadow-sm: 0 1px 3px rgba(0,0,0,0.1);
+            --shadow-md: 0 4px 6px -1px rgba(0,0,0,0.1), 0 2px 4px -1px rgba(0,0,0,0.06);
+        }
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            font-family: 'Inter', system-ui, -apple-system, sans-serif;
+            background-color: var(--bg-app);
+            color: var(--text-primary);
+            overflow: hidden;
+        }
+        #container {
+            display: grid;
+            grid-template-rows: 64px 1fr 200px;
+            grid-template-columns: 1fr 340px;
+            gap: 16px;
+            padding: 16px;
+            height: 100vh;
+        }
+        #main-view-wrapper, #sidebar, #trends, #toolbar {
+            background: var(--bg-card);
+            border-radius: 12px;
+            box-shadow: var(--shadow-sm);
+            border: 1px solid #E2E8F0;
+            transition: box-shadow 0.2s;
+        }
+        #main-view-wrapper:hover, #sidebar:hover {
+            box-shadow: var(--shadow-md);
+        }
+        #toolbar {
+            grid-column: 1 / -1;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 0 24px;
+        }
+        #toolbar h1 {
+            font-size: 18px;
+            font-weight: 600;
+            color: var(--text-primary);
+            margin: 0;
+        }
+        #main-view-wrapper {
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            position: relative;
+        }
+        #main-view {
+            width: 100%;
+            height: 100%;
+        }
+        #sidebar {
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            padding: 20px;
+            overflow-y: auto;
+        }
+        #trends {
+            grid-column: 1 / -1;
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+        .btn {
+            background: transparent;
+            color: var(--text-secondary);
+            border: 1px solid #CBD5E1;
+            padding: 6px 16px;
+            font-size: 13px;
+            font-weight: 500;
+            border-radius: 6px;
+            transition: all 0.2s;
+            cursor: pointer;
+        }
+        .btn:hover {
+            background: #F1F5F9;
+        }
+        .btn.active {
+            background: var(--accent);
+            color: white;
+            border-color: var(--accent);
+            box-shadow: 0 2px 4px rgba(79, 70, 229, 0.3);
+        }
+        #sidebar {
+            padding: 20px;
+            overflow-y: auto;
+        }
+        #sidebar h2 {
+            font-size: 14px;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            color: var(--text-secondary);
+            border-bottom: 1px solid #E2E8F0;
+            padding-bottom: 12px;
+            margin-bottom: 16px;
+        }
+        h2 {
+            font-size: 18px;
+            margin-bottom: 15px;
+            color: #333;
+        }
+        .stat-item {
+            margin-bottom: 10px;
+            padding: 10px;
+            background: #f9f9f9;
+            border-radius: 4px;
+        }
+        .stat-label {
+            font-size: 12px;
+            color: #666;
+        }
+        .stat-value {
+            font-size: 20px;
+            font-weight: bold;
+            color: #333;
+        }
+        .change-item {
+            padding: 8px;
+            margin-bottom: 6px;
+            background: #F8FAFC;
+            border-radius: 4px;
+            font-size: 13px;
+        }
+    </style>
+</head>
+<body>
+    <div id="container">
+        <div id="toolbar">
+            <h1 style="font-size: 20px; color: #333;">Hippocampus Visualization</h1>
+            <div style="display: flex; gap: 8px;">
+                <button class="btn active" onclick="switchView('modules', event)">Module Graph</button>
+                <button class="btn" onclick="switchView('files-graph', event)">File Graph</button>
+                <button class="btn" onclick="switchView('functions', event)">Function Graph</button>
+                <button class="btn" onclick="switchView('files-tree', event)">File Tree</button>
+            </div>
+        </div>
+        <div id="main-view-wrapper" style="position: relative;">
+            <div id="main-view" style="width: 100%; height: 100%;"></div>
+            <div id="breadcrumb" style="position: absolute; top: 0; left: 0; right: 0; z-index: 1000;
+                                        padding: 8px 20px; background: rgba(248,250,252,0.95);
+                                        border-bottom: 1px solid #e2e8f0; font-size: 13px; display: none;
+                                        border-radius: 12px 12px 0 0;">
+            </div>
+            <button id="backButton" onclick="goBack()"
+                    style="position: absolute; top: 44px; left: 20px; z-index: 1000;
+                           background: white; border: 1px solid #e2e8f0; padding: 6px 14px;
+                           border-radius: 6px; cursor: pointer; display: none;
+                           box-shadow: 0 2px 4px rgba(0,0,0,0.1); font-size: 13px;">
+                ⬅ Back
+            </button>
+        </div>
+        <div id="sidebar">
+            <h2>Details</h2>
+            <div id="details-content">
+                <p style="color: #999;">Click on a module or file to view details</p>
+            </div>
+        </div>
+        <div id="trends"></div>
+    </div>
+
+    <script>
+        // Data embedded from JSON files
+        const INDEX_DATA = __INDEX_DATA__;
+        const MODULES_GRAPH = __MODULES_GRAPH__;
+        const FILES_GRAPH = __FILES_GRAPH__;
+        const FUNCTIONS_GRAPH = __FUNCTIONS_GRAPH__;
+        const FILES_TREEMAP = __FILES_TREEMAP__;
+        const MODULES_TREEMAP = __MODULES_TREEMAP__;
+        const STATS_PIE = __STATS_PIE__;
+        const TRENDS = __TRENDS__;
+        const SNAPSHOTS_DATA = __SNAPSHOTS_DATA__;
+
+        // Initialize charts
+        const mainChart = echarts.init(document.getElementById('main-view'));
+        const trendsChart = echarts.init(document.getElementById('trends'));
+
+        // Shared ECharts legend config for module role views
+        const ROLE_LEGEND = {
+            data: ['core', 'infra', 'interface', 'test', 'docs'],
+            top: 10,
+            right: 20,
+            orient: 'vertical',
+            itemGap: 10,
+            textStyle: { color: '#475569', fontSize: 12 }
+        };
+
+        // Shared categories with colors for module role views
+        const ROLE_CATEGORIES = [
+            {name: 'core', itemStyle: {color: '#6366F1'}},
+            {name: 'infra', itemStyle: {color: '#A855F7'}},
+            {name: 'interface', itemStyle: {color: '#14B8A6'}},
+            {name: 'test', itemStyle: {color: '#F59E0B'}},
+            {name: 'docs', itemStyle: {color: '#94A3B8'}}
+        ];
+
+        let currentView = 'modules';
+        let viewStack = []; // Navigation stack for back button
+        let focusFile = null; // For function graph filtering
+
+        // Switch view function
+        function switchView(view, event, options = {}) {
+            currentView = view;
+
+            // Reset focus mode UI when switching views
+            hideBreadcrumb();
+
+            // Update button active states
+            document.querySelectorAll('.btn').forEach(btn => btn.classList.remove('active'));
+
+            // Find and activate the correct button based on view
+            const viewButtonMap = {
+                'modules': 0,
+                'files-graph': 1,
+                'functions': 2,
+                'files-tree': 3
+            };
+
+            const buttonIndex = viewButtonMap[view];
+            if (buttonIndex !== undefined) {
+                const buttons = document.querySelectorAll('.btn');
+                if (buttons[buttonIndex]) {
+                    buttons[buttonIndex].classList.add('active');
+                }
+            }
+
+            if (view === 'modules') {
+                renderModulesGraph();
+            } else if (view === 'files-graph') {
+                renderFilesGraph(options.filterModule);
+            } else if (view === 'functions') {
+                focusFile = options.focusFile || null;
+                renderFunctionsGraph(focusFile);
+            } else if (view === 'files-tree') {
+                renderFilesTreemap();
+            }
+        }
+
+        // Render modules graph
+        function renderModulesGraph() {
+            // Always render static graph by default (shows real dependencies)
+            renderStaticModulesGraph();
+        }
+
+        // Render static modules graph (fallback)
+        function renderStaticModulesGraph() {
+            const option = {
+                title: { show: false },
+                tooltip: {
+                    backgroundColor: 'rgba(255, 255, 255, 0.9)',
+                    borderColor: '#E2E8F0',
+                    textStyle: { color: '#1E293B' },
+                    padding: 12,
+                    extraCssText: 'box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1); backdrop-filter: blur(4px);',
+                    formatter: function(params) {
+                        if (params.dataType === 'node') {
+                            const d = params.data;
+                            return `<b>${d.name}</b><br/>` +
+                                   `Role: ${d.role || d.category}<br/>` +
+                                   `Score: ${d.core_score.toFixed(3)}<br/>` +
+                                   `Files: ${d.file_count}<br/>` +
+                                   `<i>${d.desc}</i>`;
+                        }
+                        return params.name;
+                    }
+                },
+                legend: ROLE_LEGEND,
+                series: [{
+                    type: 'graph',
+                    layout: 'none',
+                    data: MODULES_GRAPH.nodes.map(n => ({
+                        ...n,
+                        x: MODULES_GRAPH.positions[n.id].x,
+                        y: MODULES_GRAPH.positions[n.id].y,
+                        symbolSize: 28 + (Math.sqrt(n.core_score) * 36)
+                    })),
+                    links: MODULES_GRAPH.links,
+                    categories: MODULES_GRAPH.categories,
+                    roam: true,
+                    draggable: false,
+                    edgeSymbol: ['none', 'arrow'],
+                    edgeSymbolSize: [4, 8],
+                    label: {
+                        show: true,
+                        position: 'right',
+                        formatter: '{b}',
+                        fontSize: 12,
+                        fontWeight: 600,
+                        color: '#0F172A',
+                        distance: 6,
+                        textBorderColor: '#FFFFFF',
+                        textBorderWidth: 3
+                    },
+                    labelLayout: { hideOverlap: true },
+                    lineStyle: {
+                        color: '#94A3B8',
+                        opacity: 0.4,
+                        width: 1.5,
+                        curveness: 0.2
+                    },
+                    emphasis: {
+                        scale: true,
+                        focus: 'adjacency',
+                        lineStyle: {
+                            width: 3,
+                            color: '#475569',
+                            opacity: 0.9
+                        }
+                    }
+                }]
+            };
+            mainChart.setOption(option);
+
+            // Add click event for module nodes
+            mainChart.off('click');
+            mainChart.on('click', function(params) {
+                if (params.dataType === 'node') {
+                    showModuleDetails(params.data);
+                }
+            });
+        }
+
