@@ -51,9 +51,6 @@ __all__ = [
 _LEGACY_MODULE_ALIASES = {
     "hippocampus.resource_paths": "hippocampus.integration.resource_paths",
     "hippocampus.api_support": "hippocampus.api.support",
-    "hippocampus.cli_architect": "hippocampus.cli.architect",
-    "hippocampus.cli_architect_commands": "hippocampus.cli.architect_commands",
-    "hippocampus.cli_architect_reports": "hippocampus.cli.architect_reports",
     "hippocampus.cli_commands_core": "hippocampus.cli.commands_core",
     "hippocampus.cli_commands_pipeline": "hippocampus.cli.commands_pipeline",
     "hippocampus.cli_commands_project_bootstrap": "hippocampus.cli.commands_project_bootstrap",

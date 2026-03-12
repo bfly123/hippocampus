@@ -8,7 +8,13 @@ import click
 
 from .pipeline_helpers import build_ranked_tag_report, run_pipeline_steps
 from ..config import load_config, require_llm_configured
-from ..constants import CONFIG_FILE, HIPPO_DIR
+from ..constants import (
+    CONFIG_FILE,
+    HIPPO_DIR,
+    PHASE1_CACHE_FILE,
+    PHASE2_CACHE_FILE,
+    PHASE3_CACHE_FILE,
+)
 
 
 def _echo_index_start(ctx: Any, *, phase_num: int | None) -> None:
@@ -30,6 +36,16 @@ def _require_index_llm(cfg) -> None:
         require_llm_configured(cfg)
     except RuntimeError as exc:
         raise click.ClickException(str(exc)) from exc
+
+
+def _clear_incremental_index_cache(output_dir: Path) -> list[Path]:
+    cleared: list[Path] = []
+    for cache_name in (PHASE1_CACHE_FILE, PHASE2_CACHE_FILE, PHASE3_CACHE_FILE):
+        cache_path = output_dir / cache_name
+        if cache_path.exists():
+            cache_path.unlink()
+            cleared.append(cache_path)
+    return cleared
 
 
 def build_repomap_command():
@@ -164,6 +180,176 @@ def build_index_command():
             pass
 
     return index
+
+
+def build_onekey_command(*, command_refs: dict[str, object], run_cmd):
+    @click.command("onekey")
+    @click.option("--target", default=".", help="Project root directory.")
+    @click.option(
+        "--prompt-profile",
+        type=click.Choice(["auto", "map", "deep"]),
+        default="map",
+        show_default=True,
+        help="Primary structure prompt profile for the initial pipeline run.",
+    )
+    @click.option(
+        "--snapshot-message",
+        "-m",
+        default="onekey",
+        show_default=True,
+        help="Snapshot message saved after the initial generation completes.",
+    )
+    @click.option(
+        "--open-viz",
+        is_flag=True,
+        help="Open the generated visualization in a browser.",
+    )
+    @click.pass_context
+    def onekey(ctx, target, prompt_profile, snapshot_message, open_viz):
+        """First-time setup and full artifact generation for a project."""
+        tgt = Path(target).resolve()
+        out = tgt / HIPPO_DIR
+        out.mkdir(parents=True, exist_ok=True)
+
+        if not ctx.obj["quiet"]:
+            click.echo("=== Step 1: Full Pipeline ===")
+        ctx.invoke(run_cmd, target=target, prompt_profile=prompt_profile)
+
+        if not ctx.obj["quiet"]:
+            click.echo("=== Step 2: Generate Map + Deep Prompts ===")
+        ctx.invoke(
+            command_refs["structure-prompt-all"],
+            target=target,
+            set_default="keep",
+        )
+
+        if not ctx.obj["quiet"]:
+            click.echo("=== Step 3: Save Snapshot ===")
+        from ..tools.snapshot import save_snapshot
+
+        snapshot = save_snapshot(out, message=snapshot_message)
+        if not ctx.obj["quiet"]:
+            click.echo(f"Snapshot saved: {snapshot['snapshot_id']}")
+
+        if not ctx.obj["quiet"]:
+            click.echo("=== Step 4: Generate Visualization ===")
+        from ..viz.generator import generate_viz_html
+
+        viz_path = generate_viz_html(out, verbose=ctx.obj["verbose"])
+        if not ctx.obj["quiet"]:
+            click.echo(f"Generated: {viz_path}")
+
+        if open_viz:
+            import webbrowser
+
+            webbrowser.open(str(viz_path))
+
+        if not ctx.obj["quiet"]:
+            click.echo("=== Onekey complete ===")
+
+    return onekey
+
+
+def build_update_command(*, command_refs: dict[str, object], trim_cmd, index_cmd):
+    @click.command("update")
+    @click.option("--target", default=".", help="Project root directory.")
+    @click.option(
+        "--default-prompt",
+        type=click.Choice(["map", "deep", "keep"]),
+        default="map",
+        show_default=True,
+        help="Which generated prompt becomes structure-prompt.md after refresh.",
+    )
+    @click.option(
+        "--snapshot-message",
+        "-m",
+        default="update",
+        show_default=True,
+        help="Snapshot message saved after the refresh completes.",
+    )
+    @click.option(
+        "--open-viz",
+        is_flag=True,
+        help="Open the generated visualization in a browser.",
+    )
+    @click.option(
+        "--full",
+        is_flag=True,
+        help="Clear incremental caches before rebuilding from scratch.",
+    )
+    @click.option(
+        "--no-llm",
+        is_flag=True,
+        hidden=True,
+        help="Run only local phases and skip all LLM work.",
+    )
+    @click.pass_context
+    def update(ctx, target, default_prompt, snapshot_message, open_viz, full, no_llm):
+        """Incrementally refresh outputs for an initialized project."""
+        tgt = Path(target).resolve()
+        out = tgt / HIPPO_DIR
+        out.mkdir(parents=True, exist_ok=True)
+
+        if full:
+            cleared = _clear_incremental_index_cache(out)
+            if not ctx.obj["quiet"]:
+                click.echo(
+                    "Cleared incremental index cache: "
+                    f"{len(cleared)} file(s)."
+                )
+
+        run_pipeline_steps(
+            ctx=ctx,
+            quiet=ctx.obj["quiet"],
+            echo=click.echo,
+            steps=(
+                ("Step 1: Init", command_refs["init"], {"target": target}),
+                ("Step 2: Sig Extract", command_refs["sig-extract"], {"target": target}),
+                ("Step 3: Tree", command_refs["tree"], {"target": target}),
+                ("Step 4: Tree Diff", command_refs["tree-diff"], {"target": target}),
+                ("Step 5: Trim", trim_cmd, {"target": target}),
+                (
+                    "Step 6: Index (incremental)",
+                    index_cmd,
+                    {"target": target, "phase_num": None, "no_llm": no_llm},
+                ),
+                (
+                    "Step 7: Structure Prompt Bundle",
+                    command_refs["structure-prompt-all"],
+                    {
+                        "target": target,
+                        "set_default": default_prompt,
+                        "llm_enhance": False if no_llm else None,
+                    },
+                ),
+            ),
+        )
+
+        if not ctx.obj["quiet"]:
+            click.echo("=== Step 8: Save Snapshot ===")
+        from ..tools.snapshot import save_snapshot
+
+        snapshot = save_snapshot(out, message=snapshot_message)
+        if not ctx.obj["quiet"]:
+            click.echo(f"Snapshot saved: {snapshot['snapshot_id']}")
+
+        if not ctx.obj["quiet"]:
+            click.echo("=== Step 9: Generate Visualization ===")
+        from ..viz.generator import generate_viz_html
+
+        viz_path = generate_viz_html(out, verbose=ctx.obj["verbose"])
+        if not ctx.obj["quiet"]:
+            click.echo(f"Generated: {viz_path}")
+
+        if open_viz:
+            import webbrowser
+
+            webbrowser.open(str(viz_path))
+
+        if not ctx.obj["quiet"]:
+            click.echo("=== Update complete ===")
+
+    return update
 
 
 def build_run_command(*, command_refs: dict[str, object], trim_cmd, index_cmd):

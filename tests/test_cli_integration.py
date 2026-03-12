@@ -22,6 +22,34 @@ class TestCliHelp:
         result = runner.invoke(cli, ["--help"])
         assert result.exit_code == 0
         assert "Hippocampus" in result.output
+        assert "Quick start:" in result.output
+        assert "First-time setup: hippo onekey" in result.output
+        assert "Incremental refresh: hippo update" in result.output
+        assert "Manual" in result.output
+        assert "steps:" in result.output
+        assert "hippo init / sig-extract / tree / index / structure-prompt" in result.output
+        assert "Inspect" in result.output
+        assert "outputs:" in result.output
+        assert "hippo overview" in result.output
+        assert "Core Workflow:" in result.output
+        assert "Explore & Inspect:" in result.output
+        assert "Advanced Tools:" in result.output
+
+    def test_onekey_help(self, runner):
+        result = runner.invoke(cli, ["onekey", "--help"])
+        assert result.exit_code == 0
+        assert "First-time setup and full artifact generation" in result.output
+        assert "--prompt-profile" in result.output
+        assert "--snapshot-message" in result.output
+
+    def test_update_help(self, runner):
+        result = runner.invoke(cli, ["update", "--help"])
+        assert result.exit_code == 0
+        assert "Incrementally refresh outputs for an initialized project" in result.output
+        assert "--default-prompt" in result.output
+        assert "--snapshot-message" in result.output
+        assert "--full" in result.output
+        assert "--no-llm" not in result.output
 
     def test_init_help(self, runner):
         result = runner.invoke(cli, ["init", "--help"])

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import os
 from pathlib import Path
 
 import click
@@ -105,12 +106,13 @@ def register_query_commands(cli) -> None:
         "--staged",
         is_flag=True,
         default=True,
+        hidden=True,
         help="Review staged changes (default).",
     )
     @click.option("--target", default=".", help="Project root directory.")
     @click.pass_context
     def review(ctx, staged, target):
-        """Review code changes against architecture."""
+        """Review staged changes against architecture."""
         if not staged:
             click.echo("Currently only --staged is supported.")
             return
@@ -118,7 +120,13 @@ def register_query_commands(cli) -> None:
         from ..tools.reviewer import Reviewer
 
         reviewer = Reviewer()
-        exit_code = asyncio.run(reviewer.review_staged())
+        tgt = Path(target).resolve()
+        previous_cwd = Path.cwd()
+        try:
+            os.chdir(tgt)
+            exit_code = asyncio.run(reviewer.review_staged())
+        finally:
+            os.chdir(previous_cwd)
         if exit_code != 0:
             ctx.exit(exit_code)
 

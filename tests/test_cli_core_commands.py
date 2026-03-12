@@ -6,6 +6,8 @@ from hippocampus.cli import cli
 
 
 CORE_COMMANDS = {
+    "onekey",
+    "update",
     "init",
     "sig-extract",
     "tree",
@@ -19,6 +21,8 @@ CORE_COMMANDS = {
 }
 
 EXPECTED_MODULES = {
+    "onekey": "hippocampus.cli.pipeline_command_builders",
+    "update": "hippocampus.cli.pipeline_command_builders",
     "init": "hippocampus.cli.commands_project_bootstrap",
     "sig-extract": "hippocampus.cli.commands_project_bootstrap",
     "tree": "hippocampus.cli.commands_project_bootstrap",
@@ -47,3 +51,25 @@ def test_index_accepts_no_llm_option(tmp_path):
         ["index", "--target", str(tmp_path), "--no-llm"],
     )
     assert result.exit_code == 0
+
+
+def test_update_runs_incremental_refresh_without_llm(tmp_path):
+    (tmp_path / "src").mkdir()
+    (tmp_path / "src" / "demo.py").write_text("def hello():\n    return 'world'\n", encoding="utf-8")
+
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        ["update", "--target", str(tmp_path), "--no-llm"],
+    )
+    assert result.exit_code == 0
+
+    out = tmp_path / ".hippocampus"
+    assert (out / "hippocampus-index.json").exists()
+    assert (out / "code-signatures.json").exists()
+    assert (out / "tree.json").exists()
+    assert (out / "structure-prompt-map.md").exists()
+    assert (out / "structure-prompt-deep.md").exists()
+    assert (out / "structure-prompt.md").exists()
+    assert (out / "hippocampus-viz.html").exists()
+    assert (out / "snapshots").is_dir()
