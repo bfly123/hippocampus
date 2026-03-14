@@ -6,18 +6,18 @@ from collections import Counter
 from pathlib import Path
 from typing import Any
 
+from llmgateway import TaskRequest, Validator
 
-async def phase3a_enrich_module_impl(
-    llm: Any,
+
+def build_phase3a_request(
     mod: dict,
     mod_files: list[str],
     phase1_results: dict[str, dict],
     *,
     project_root: Path | None = None,
-) -> dict:
-    """Run Phase 3a LLM call for a single module."""
+) -> tuple[TaskRequest, Validator, set[str]]:
     from ...llm.prompts import build_phase_3a_messages
-    from ...llm.validators import _try_parse_json, validate_phase_3a
+    from ...llm.validators import validate_phase_3a
 
     mid = mod["id"]
     valid_files = set(mod_files)
@@ -28,26 +28,61 @@ async def phase3a_enrich_module_impl(
         file_lines.append(f"  {fp}: {desc}")
     module_files_text = "\n".join(file_lines)
 
-    msg_3a = build_phase_3a_messages(
+    messages = build_phase_3a_messages(
         project_root=project_root,
         module_id=mid,
         module_desc=mod.get("desc", ""),
         module_files=module_files_text[:3000],
     )
 
-    def validator_3a(text):
+    def validator_3a(text: str) -> list[str]:
         return validate_phase_3a(text, valid_files)
 
-    text_3a, _ = await llm.call_with_retry("phase_3a", msg_3a, validator_3a)
-    data_3a, _ = _try_parse_json(text_3a)
+    return (
+        TaskRequest(task="phase_3a", messages=messages),
+        validator_3a,
+        valid_files,
+    )
 
+
+def apply_phase3a_response(
+    mod: dict,
+    mod_files: list[str],
+    response_data: dict | list | None,
+    *,
+    valid_files: set[str],
+) -> dict:
     enriched = dict(mod)
     enriched["file_count"] = len(mod_files)
-    if data_3a:
-        enriched["desc"] = data_3a.get("desc", mod.get("desc", ""))
-        key_files = data_3a.get("key_files", [])
+    if isinstance(response_data, dict):
+        enriched["desc"] = response_data.get("desc", mod.get("desc", ""))
+        key_files = response_data.get("key_files", [])
         enriched["key_files"] = [f for f in key_files if f in valid_files]
     return enriched
+
+
+async def phase3a_enrich_module_impl(
+    llm: Any,
+    mod: dict,
+    mod_files: list[str],
+    phase1_results: dict[str, dict],
+    *,
+    project_root: Path | None = None,
+) -> dict:
+    """Run Phase 3a LLM call for a single module."""
+    request, validator_3a, valid_files = build_phase3a_request(
+        mod,
+        mod_files,
+        phase1_results,
+        project_root=project_root,
+    )
+    result_3a = await llm.run_json_task_with_retry(request.task, request.messages, validator_3a)
+    return apply_phase3a_response(
+        mod,
+        mod_files,
+        result_3a.data,
+        valid_files=valid_files,
+    )
 
 
 def infer_primary_lang_from_phase1(phase1_results: dict[str, dict]) -> str:
@@ -86,7 +121,7 @@ async def build_project_overview_impl(
 ) -> dict:
     """Run Phase 3b LLM call for project overview."""
     from ...llm.prompts import build_phase_3b_messages
-    from ...llm.validators import _try_parse_json, validate_phase_3b
+    from ...llm.validators import validate_phase_3b
 
     module_summaries = "\n".join(
         f"- {m['id']}: {m.get('desc', '')}" for m in enriched_modules
@@ -103,8 +138,8 @@ async def build_project_overview_impl(
         primary_lang=primary_lang,
     )
 
-    text_3b, _ = await llm.call_with_retry("phase_3b", msg_3b, validate_phase_3b)
-    project_data, _ = _try_parse_json(text_3b)
+    result_3b = await llm.run_json_task_with_retry("phase_3b", msg_3b, validate_phase_3b)
+    project_data = result_3b.data if isinstance(result_3b.data, dict) else None
     return project_data if project_data else {
         "overview": "",
         "architecture": "",

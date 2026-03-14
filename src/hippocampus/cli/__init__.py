@@ -111,6 +111,15 @@ def cli(ctx, config_path, output_dir, verbose, quiet):
       Manual steps: hippo init / sig-extract / tree / index / structure-prompt
       Inspect outputs: hippo overview
 
+    Standard outputs:
+
+      .hippocampus/hippocampus-index.json
+      .hippocampus/code-signatures.json
+      .hippocampus/tree.json
+      .hippocampus/structure-prompt.md
+      .hippocampus/hippocampus-viz.html
+      .hippocampus/architect-metrics.json
+
     All commands remain available below; the help view is grouped so the
     common workflow appears first.
     """

@@ -5,9 +5,22 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "hippocampus"
 version = "0.1.0"
-description = "Code repository indexing and analysis toolkit"
+description = "Code repository indexing, navigation, and structure analysis toolkit"
 readme = "README.md"
 requires-python = ">=3.10"
+license = {file = "LICENSE"}
+keywords = ["code-indexing", "code-navigation", "repository-analysis", "developer-tools", "llm"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+    "Topic :: Software Development :: Documentation",
+]
 dependencies = [
     "click>=8.0",
     "pyyaml>=6.0",
@@ -21,6 +34,7 @@ dependencies = [
 
 [project.optional-dependencies]
 dev = ["pytest", "pytest-asyncio"]
+llm = ["llmgateway @ git+https://github.com/bfly123/llmgateway.git@main"]
 repomap = [
     "tree-sitter>=0.25.2",
     "tree-sitter-language-pack>=0.13.0",

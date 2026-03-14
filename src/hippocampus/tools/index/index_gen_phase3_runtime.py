@@ -2,8 +2,13 @@
 
 from __future__ import annotations
 
+import time
 from pathlib import Path
 from typing import Any
+
+from ...llm.gateway import create_llm_gateway
+from .index_gen_progress import run_json_requests_with_progress
+from .index_gen_reporting import format_phase_duration, format_progress_line
 
 
 def _group_files_by_module(file_to_module: dict[str, str]) -> dict[str, list[str]]:
@@ -37,30 +42,68 @@ def _cached_module_result(mod: dict, mod_files: list[str], cached_entry: dict[st
 async def _enrich_modules(
     modules: list[dict],
     *,
+    verbose: bool,
     cached_3a: dict[str, dict],
     module_files_map: dict[str, list[str]],
     phase1_results: dict[str, dict],
     phase3_module_input_hash_fn,
-    phase3a_enrich_module_fn,
+    phase3a_request_builder_fn,
+    phase3a_response_parser_fn,
     llm_3,
 ) -> tuple[list[dict], int, int]:
-    enriched_modules: list[dict] = []
+    enriched_modules: list[dict | None] = [None] * len(modules)
     reused_3a = 0
     called_3a = 0
-    for mod in modules:
-        enriched, cache_hit = await _enrich_single_module(
+    pending: list[tuple[int, dict, list[str], str, object, object, set[str]]] = []
+    project_root = Path(llm_3.config.target).resolve() if hasattr(llm_3, "config") else None
+
+    for index, mod in enumerate(modules):
+        enriched, cache_hit, pending_item = await _enrich_single_module(
             mod,
             cached_3a=cached_3a,
             module_files_map=module_files_map,
             phase1_results=phase1_results,
             phase3_module_input_hash_fn=phase3_module_input_hash_fn,
-            phase3a_enrich_module_fn=phase3a_enrich_module_fn,
-            llm_3=llm_3,
+            phase3a_request_builder_fn=phase3a_request_builder_fn,
+            project_root=project_root,
         )
-        enriched_modules.append(enriched)
-        reused_3a += int(cache_hit)
-        called_3a += int(not cache_hit)
-    return enriched_modules, reused_3a, called_3a
+        if cache_hit:
+            enriched_modules[index] = enriched
+            reused_3a += 1
+            continue
+        if pending_item is not None:
+            pending.append((index, mod, *pending_item))
+            called_3a += 1
+
+    if pending:
+        requests = [item[4] for item in pending]
+        validators = [item[5] for item in pending]
+        results = await run_json_requests_with_progress(
+            llm=llm_3,
+            requests=requests,
+            validators=validators,
+            verbose=verbose,
+            label="Phase 3a",
+            detail=f"{len(pending)} module(s)",
+        )
+        for pending_item, result_item in zip(pending, results):
+            index, mod, mod_files, mod_hash, request, _validator, valid_files = pending_item
+            enriched = phase3a_response_parser_fn(
+                mod,
+                mod_files,
+                result_item.data,
+                valid_files=valid_files,
+            )
+            enriched_modules[index] = enriched
+            cached_3a[mod["id"]] = {
+                "hash": mod_hash,
+                "result": {
+                    "desc": enriched.get("desc", ""),
+                    "key_files": enriched.get("key_files", []),
+                },
+            }
+
+    return [module for module in enriched_modules if module is not None], reused_3a, called_3a
 
 
 async def _enrich_single_module(
@@ -70,25 +113,23 @@ async def _enrich_single_module(
     module_files_map: dict[str, list[str]],
     phase1_results: dict[str, dict],
     phase3_module_input_hash_fn,
-    phase3a_enrich_module_fn,
-    llm_3,
-) -> tuple[dict, bool]:
+    phase3a_request_builder_fn,
+    project_root: Path | None,
+) -> tuple[dict | None, bool, tuple[list[str], str, object, object, set[str]] | None]:
     module_id = mod["id"]
     mod_files = module_files_map.get(module_id, [])
     mod_hash = _phase3a_hash(mod, mod_files, phase1_results, phase3_module_input_hash_fn)
     cached_entry = cached_3a.get(module_id)
     if cached_entry and cached_entry.get("hash") == mod_hash:
-        return _cached_module_result(mod, mod_files, cached_entry), True
+        return _cached_module_result(mod, mod_files, cached_entry), True, None
 
-    enriched = await phase3a_enrich_module_fn(llm_3, mod, mod_files, phase1_results)
-    cached_3a[module_id] = {
-        "hash": mod_hash,
-        "result": {
-            "desc": enriched.get("desc", ""),
-            "key_files": enriched.get("key_files", []),
-        },
-    }
-    return enriched, False
+    request, validator, valid_files = phase3a_request_builder_fn(
+        mod,
+        mod_files,
+        phase1_results,
+        project_root=project_root,
+    )
+    return None, False, (mod_files, mod_hash, request, validator, valid_files)
 
 
 def _prune_removed_modules(cached_3a: dict[str, dict], modules: list[dict]) -> None:
@@ -124,12 +165,23 @@ async def _build_project_node(
 
     if verbose:
         print("Phase 3b incremental: cache miss, calling LLM")
+        print(format_progress_line("Phase 3b", 0, 1, detail="project overview request"))
+    started = time.perf_counter()
     project_node = await build_project_overview_fn(
         llm_3,
         enriched_modules,
         phase1_results,
         target,
     )
+    if verbose:
+        print(
+            format_progress_line(
+                "Phase 3b",
+                1,
+                1,
+                detail=format_phase_duration(time.perf_counter() - started),
+            )
+        )
     return project_node, {"hash": summaries_hash, "result": project_node}
 
 
@@ -161,24 +213,30 @@ async def phase_3_impl(
     load_phase3_cache_fn,
     phase3_module_input_hash_fn,
     content_hash_fn,
-    phase3a_enrich_module_fn,
+    phase3a_request_builder_fn,
+    phase3a_response_parser_fn,
     build_project_overview_fn,
     save_phase3_cache_fn,
 ) -> tuple[list[dict], dict[str, Any]]:
-    from ...llm.client import HippoLLM
-
-    llm_3 = HippoLLM(config)
+    llm_3 = create_llm_gateway(config)
     cache: dict[str, Any] = load_phase3_cache_fn(output_dir) if output_dir else {}
     cached_3a: dict[str, dict] = cache.get("phase_3a", {})
     cached_3b: dict[str, Any] = cache.get("phase_3b", {})
+    if verbose:
+        print(
+            f"Phase 3 plan: {len(modules)} module(s), "
+            f"{len(file_to_module)} file assignments"
+        )
 
     enriched_modules, reused_3a, called_3a = await _enrich_modules(
         modules,
+        verbose=verbose,
         cached_3a=cached_3a,
         module_files_map=_group_files_by_module(file_to_module),
         phase1_results=phase1_results,
         phase3_module_input_hash_fn=phase3_module_input_hash_fn,
-        phase3a_enrich_module_fn=phase3a_enrich_module_fn,
+        phase3a_request_builder_fn=phase3a_request_builder_fn,
+        phase3a_response_parser_fn=phase3a_response_parser_fn,
         llm_3=llm_3,
     )
     _prune_removed_modules(cached_3a, modules)

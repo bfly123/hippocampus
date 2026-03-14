@@ -33,7 +33,9 @@ from .index_gen_phase2 import (
 from .index_gen_phase2_incremental import phase2_incremental_impl as _phase2_incremental_impl
 from .index_gen_phase1 import phase_1_impl as _phase_1_impl
 from .index_gen_phase3 import (
+    apply_phase3a_response as _apply_phase3a_response_impl,
     build_project_overview_impl as _build_project_overview_impl,
+    build_phase3a_request as _build_phase3a_request_impl,
     phase3a_enrich_module_impl as _phase3a_enrich_module_impl,
 )
 from .index_gen_phase3_runtime import phase_3_impl as _phase_3_impl
@@ -163,7 +165,8 @@ async def phase_3(
         load_phase3_cache_fn=_load_phase3_cache,
         phase3_module_input_hash_fn=_phase3_module_input_hash,
         content_hash_fn=_content_hash,
-        phase3a_enrich_module_fn=_phase3a_enrich_module,
+        phase3a_request_builder_fn=_build_phase3a_request,
+        phase3a_response_parser_fn=_apply_phase3a_response,
         build_project_overview_fn=_build_project_overview_impl,
         save_phase3_cache_fn=_save_phase3_cache,
     )
@@ -182,6 +185,36 @@ async def _phase3a_enrich_module(
         mod_files,
         phase1_results,
         project_root=project_root,
+    )
+
+
+def _build_phase3a_request(
+    mod: dict,
+    mod_files: list[str],
+    phase1_results: dict[str, dict],
+    *,
+    project_root: Path | None = None,
+):
+    return _build_phase3a_request_impl(
+        mod,
+        mod_files,
+        phase1_results,
+        project_root=project_root,
+    )
+
+
+def _apply_phase3a_response(
+    mod: dict,
+    mod_files: list[str],
+    response_text: str,
+    *,
+    valid_files: set[str],
+) -> dict:
+    return _apply_phase3a_response_impl(
+        mod,
+        mod_files,
+        response_text,
+        valid_files=valid_files,
     )
 
 

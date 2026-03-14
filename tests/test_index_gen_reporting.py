@@ -7,6 +7,8 @@ import pytest
 from hippocampus.tools.index_gen_reporting import (
     format_failed_file_summary,
     format_phase_duration,
+    format_progress_bar,
+    format_progress_line,
 )
 from hippocampus.tools.index_gen_runtime import run_index_pipeline_impl
 
@@ -24,6 +26,12 @@ def test_format_failed_file_summary():
     )
     assert summary.startswith("Phase 1 failed files: 12/30")
     assert "... +2 more" in summary
+
+
+def test_format_progress_helpers():
+    assert format_progress_bar(3, 10, width=10) == "[###.......]"
+    line = format_progress_line("Phase X", 3, 10, detail="running", width=10)
+    assert line == "Phase X: [###.......] 3/10 ( 30.0%) | running"
 
 
 @pytest.mark.asyncio

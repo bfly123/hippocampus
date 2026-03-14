@@ -3,7 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any, Awaitable, Callable
 
-from ...llm.transport import close_http_clients
+from llmgateway.transport import close_http_clients
 from .index_gen_runtime_support import (
     load_dir_tree,
     local_only_index,
@@ -18,7 +18,7 @@ from .index_gen_runtime_support import (
 
 
 async def cleanup_llm_clients() -> None:
-    """Close shared HTTP clients used by hippo LLM transport."""
+    """Close shared HTTP clients used by llmgateway transport."""
     try:
         await close_http_clients()
     except Exception:

@@ -2,10 +2,11 @@ from __future__ import annotations
 
 from typing import Any
 
+from ...llm.gateway import create_llm_gateway
+
 from .structure_prompt_navigation import (
     build_known_paths,
     build_navigation_brief_prompt,
-    parse_json_block,
     render_llm_navigation_brief,
     run_async,
     sanitize_navigation_brief,
@@ -111,8 +112,6 @@ async def generate_llm_navigation_brief(
     archetype: str,
     profile: dict[str, Any],
 ) -> dict[str, Any] | None:
-    from ...llm.client import HippoLLM
-
     reading_cap, axes_cap, hotspots_cap = _profile_caps(profile)
     entry_files = rank_entry_files(files, entry_file_reasons_for_archetype(archetype))
     boundaries = collect_project_boundaries(files, file_roles, entry_files)
@@ -135,17 +134,17 @@ async def generate_llm_navigation_brief(
         hotspots_cap=hotspots_cap,
     )
 
-    llm = HippoLLM(config)
+    llm = create_llm_gateway(config)
     validator = lambda text: validate_navigation_brief_json(text, known_paths)
-    text, errors = await llm.call_with_retry(
+    result = await llm.run_json_task_with_retry(
         "architect",
         [{"role": "user", "content": prompt}],
         validator=validator,
     )
-    if errors:
+    if result.errors:
         return None
 
-    data = parse_json_block(text)
+    data = result.data if isinstance(result.data, dict) else None
     if data is None:
         return None
     return sanitize_navigation_brief_profile(data, known_paths, profile)

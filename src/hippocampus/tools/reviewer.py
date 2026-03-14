@@ -2,12 +2,11 @@
 
 from __future__ import annotations
 
-import json
 import subprocess
 from pathlib import Path
 
 from ..config import HippoConfig
-from ..llm.client import HippoLLM
+from ..llm.gateway import create_llm_gateway
 
 _MAX_DIFF_CHARS = 20000
 _STRUCTURE_MAP_PATH = Path(".hippocampus/structure-prompt.md")
@@ -73,14 +72,6 @@ DECISION LOGIC:
 """
 
 
-def _strip_markdown_fences(response_text: str) -> str:
-    if "```json" in response_text:
-        return response_text.split("```json", 1)[1].split("```", 1)[0].strip()
-    if "```" in response_text:
-        return response_text.split("```", 1)[1].split("```", 1)[0].strip()
-    return response_text
-
-
 def _print_review_result(result: dict) -> bool:
     score = result.get("score", 0)
     status = result.get("status", "BLOCK")
@@ -105,7 +96,7 @@ class Reviewer:
 
     def __init__(self, config: HippoConfig | None = None):
         self.config = config or HippoConfig()
-        self.llm = HippoLLM(self.config)
+        self.llm = create_llm_gateway(self.config)
 
     def _get_staged_diff(self) -> str:
         """Get git diff of staged changes."""
@@ -131,13 +122,15 @@ class Reviewer:
         print("Reviewing architecture compliance...")
 
         try:
-            response_text = await self.llm.call(
-                phase="review",
-                messages=[{"role": "user", "content": prompt}],
+            result_payload = await self.llm.run_json_task(
+                "review",
+                [{"role": "user", "content": prompt}],
             )
-            result = json.loads(_strip_markdown_fences(response_text))
-        except json.JSONDecodeError:
-            print(f"Review failed to parse LLM response. Content:\n{response_text}")
+            if not isinstance(result_payload.data, dict):
+                raise ValueError("Review result was not a JSON object")
+            result = result_payload.data
+        except ValueError:
+            print(f"Review failed to parse LLM response. Content:\n{result_payload.text}")
             print("   (Allowing commit due to tool error)")
             return 0
         except Exception as exc:

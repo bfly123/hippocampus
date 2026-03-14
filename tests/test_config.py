@@ -58,11 +58,28 @@ class TestLoadConfig:
         (user_dir / "hippocampus-llm.yaml").write_text(
             yaml.dump(
                 {
-                    "llm": {
-                        "base_url": "https://backend.example/v1",
-                        "api_key": "global-key",
-                        "fallback_model": "openai/gpt-4o-mini",
-                    }
+                    "version": 1,
+                    "settings": {"max_concurrent": 32},
+                    "providers": {
+                        "main": {
+                            "provider_type": "glm",
+                            "api_style": "openai_responses",
+                            "base_url": "https://backend.example/v1",
+                            "api_key": "global-key",
+                        }
+                    },
+                    "tiers": {
+                        "strong": {"candidates": [{"provider": "main", "model": "openai/gpt-4.1", "reasoning_effort": "high"}]},
+                        "small": {"candidates": [{"provider": "main", "model": "openai/gpt-4o-mini", "reasoning_effort": "low"}]},
+                    },
+                    "tasks": {
+                        "phase_1": {"tier": "small"},
+                        "phase_2a": {"tier": "strong"},
+                        "phase_2b": {"tier": "small"},
+                        "phase_3a": {"tier": "small"},
+                        "phase_3b": {"tier": "strong"},
+                        "architect": {"tier": "strong"},
+                    },
                 }
             ),
             encoding="utf-8",
@@ -71,7 +88,11 @@ class TestLoadConfig:
         cfg = load_config(None, project_root=tmp_path / "project")
         assert cfg.llm.base_url == "https://backend.example/v1"
         assert cfg.llm.api_key == "global-key"
+        assert cfg.llm.max_concurrent == 32
         assert cfg.llm.fallback_model == "openai/gpt-4o-mini"
+        assert cfg.llm.phase_models.phase_2a == "openai/gpt-4.1"
+        assert cfg.llm.phase_reasoning_effort.phase_1 == "low"
+        assert cfg.llm.phase_reasoning_effort.phase_2a == "high"
 
     def test_project_config_overrides_user_global_llm(self, tmp_path: Path, monkeypatch):
         project = tmp_path / "project"
@@ -96,6 +117,7 @@ class TestLoadConfig:
         assert cfg.llm.api_key == "project-key"
 
     def test_load_from_architec_global_when_hippo_missing(self, tmp_path: Path, monkeypatch):
+        monkeypatch.setenv("HIPPOCAMPUS_USER_CONFIG_DIR", str(tmp_path / "hippo-user"))
         arch_dir = tmp_path / "arch-user"
         monkeypatch.setenv("ARCHITEC_USER_CONFIG_DIR", str(arch_dir))
         (arch_dir / "architec-llm.yaml").parent.mkdir(parents=True)
@@ -126,6 +148,7 @@ class TestLoadConfig:
         assert cfg.llm.phase_models.architect == "gpt-5.3-codex high"
 
     def test_project_default_llm_values_do_not_override_architec(self, tmp_path: Path, monkeypatch):
+        monkeypatch.setenv("HIPPOCAMPUS_USER_CONFIG_DIR", str(tmp_path / "hippo-user"))
         arch_dir = tmp_path / "arch-user"
         monkeypatch.setenv("ARCHITEC_USER_CONFIG_DIR", str(arch_dir))
         project = tmp_path / "project"

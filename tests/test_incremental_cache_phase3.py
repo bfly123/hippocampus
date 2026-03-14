@@ -66,23 +66,25 @@ class TestPhase3Incremental:
             "scale": {"files": 4, "modules": 2, "primary_lang": "python"},
         }
         with patch(
-            "hippocampus.tools.index_gen._phase3a_enrich_module",
-            new_callable=AsyncMock,
-        ) as mock_3a:
-            with patch("hippocampus.llm.client.HippoLLM") as MockLLM:
-                mock_llm = MagicMock()
-                mock_llm.call_with_retry = AsyncMock(return_value=(json.dumps(mock_3b_result), []))
-                MockLLM.return_value = mock_llm
-                result_modules, _project = await phase_3(
-                    config,
-                    modules_list,
-                    file_to_module,
-                    phase1_results,
-                    target_dir,
-                    output_dir=output_dir,
-                    verbose=True,
-                )
-                mock_3a.assert_not_called()
+            "hippocampus.tools.index.index_gen_phase3_runtime.create_llm_gateway"
+        ) as MockGateway:
+            mock_llm = MagicMock()
+            mock_llm.run_json_task_with_retry = AsyncMock(
+                return_value=type("Result", (), {"data": mock_3b_result, "errors": []})()
+            )
+            mock_llm.run_json_tasks_with_retry = AsyncMock(return_value=[])
+            mock_llm.config = config
+            MockGateway.return_value = mock_llm
+            result_modules, _project = await phase_3(
+                config,
+                modules_list,
+                file_to_module,
+                phase1_results,
+                target_dir,
+                output_dir=output_dir,
+                verbose=True,
+            )
+            mock_llm.run_json_tasks_with_retry.assert_not_called()
 
         for module in result_modules:
             assert module["desc"] == f"Cached desc for {module['id']}"
@@ -116,40 +118,86 @@ class TestPhase3Incremental:
             },
         )
 
-        async def fake_enrich(llm, mod, mod_files, phase1):
-            return {
-                "id": mod["id"],
-                "desc": f"LLM enriched {mod['id']}",
-                "file_count": len(mod_files),
-                "key_files": mod_files[:1],
-            }
-
         mock_3b_result = {
             "overview": "Test",
             "architecture": "modular",
             "scale": {"files": 4, "modules": 2, "primary_lang": "python"},
         }
-        with patch(
-            "hippocampus.tools.index_gen._phase3a_enrich_module",
-            side_effect=fake_enrich,
-        ) as mock_3a:
-            with patch("hippocampus.llm.client.HippoLLM") as MockLLM:
-                mock_llm = MagicMock()
-                mock_llm.call_with_retry = AsyncMock(return_value=(json.dumps(mock_3b_result), []))
-                MockLLM.return_value = mock_llm
-                result_modules, _ = await phase_3(
-                    config,
-                    modules_list,
-                    file_to_module,
-                    phase1_results,
-                    target_dir,
-                    output_dir=output_dir,
-                    verbose=True,
-                )
-                assert mock_3a.call_count == 1
-                assert mock_3a.call_args[0][1]["id"] == "mod:infra"
+        with patch("hippocampus.tools.index.index_gen_phase3_runtime.create_llm_gateway") as MockGateway:
+            mock_llm = MagicMock()
+            mock_llm.run_json_task_with_retry = AsyncMock(
+                return_value=type("Result", (), {"data": mock_3b_result, "errors": []})()
+            )
+            mock_llm.run_json_tasks_with_retry = AsyncMock(
+                return_value=[
+                    type("Result", (), {"data": {"desc": "LLM enriched mod:infra", "key_files": ["src/config.py"]}, "errors": []})()
+                ]
+            )
+            mock_llm.config = config
+            MockGateway.return_value = mock_llm
+            result_modules, _ = await phase_3(
+                config,
+                modules_list,
+                file_to_module,
+                phase1_results,
+                target_dir,
+                output_dir=output_dir,
+                verbose=True,
+            )
+            assert mock_llm.run_json_tasks_with_retry.call_count == 1
+            requests = mock_llm.run_json_tasks_with_retry.call_args[0][0]
+            assert len(requests) == 1
+            assert requests[0].task == "phase_3a"
 
         core = [module for module in result_modules if module["id"] == "mod:core"][0]
         infra = [module for module in result_modules if module["id"] == "mod:infra"][0]
         assert core["desc"] == "Cached core"
         assert infra["desc"] == "LLM enriched mod:infra"
+
+    @pytest.mark.asyncio
+    async def test_3a_multiple_cache_misses_batch_through_run_tasks(
+        self,
+        phase1_results,
+        modules_list,
+        file_to_module,
+        output_dir,
+        target_dir,
+    ):
+        config = make_mock_config()
+        mock_3b_result = {
+            "overview": "Test",
+            "architecture": "modular",
+            "scale": {"files": 4, "modules": 2, "primary_lang": "python"},
+        }
+        with patch("hippocampus.tools.index.index_gen_phase3_runtime.create_llm_gateway") as MockGateway:
+            mock_llm = MagicMock()
+            mock_llm.run_json_task_with_retry = AsyncMock(
+                return_value=type("Result", (), {"data": mock_3b_result, "errors": []})()
+            )
+            mock_llm.run_json_tasks_with_retry = AsyncMock(
+                return_value=[
+                    type("Result", (), {"data": {"desc": "LLM enriched mod:core", "key_files": ["src/main.py"]}, "errors": []})(),
+                    type("Result", (), {"data": {"desc": "LLM enriched mod:infra", "key_files": ["src/config.py"]}, "errors": []})(),
+                ]
+            )
+            mock_llm.config = config
+            MockGateway.return_value = mock_llm
+            result_modules, _ = await phase_3(
+                config,
+                modules_list,
+                file_to_module,
+                phase1_results,
+                target_dir,
+                output_dir=output_dir,
+                verbose=True,
+            )
+
+            assert mock_llm.run_json_tasks_with_retry.call_count == 1
+            requests = mock_llm.run_json_tasks_with_retry.call_args[0][0]
+            assert len(requests) == 2
+            assert [request.task for request in requests] == ["phase_3a", "phase_3a"]
+
+        assert [module["desc"] for module in result_modules] == [
+            "LLM enriched mod:core",
+            "LLM enriched mod:infra",
+        ]

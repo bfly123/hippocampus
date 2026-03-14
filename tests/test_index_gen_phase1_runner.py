@@ -15,10 +15,7 @@ async def test_phase1_impl_processes_files_concurrently(tmp_path: Path, monkeypa
     max_running = 0
 
     class FakeLLM:
-        def __init__(self, config):
-            del config
-
-        async def call_with_retry(self, phase, messages, validator):
+        async def run_json_task_with_retry(self, phase, messages, validator):
             nonlocal running, max_running
             assert phase == "phase_1"
             assert messages
@@ -26,12 +23,16 @@ async def test_phase1_impl_processes_files_concurrently(tmp_path: Path, monkeypa
             max_running = max(max_running, running)
             await asyncio.sleep(0.02)
             running -= 1
-            return (
-                '{"desc": "ok", "tags": ["core"], "signatures": []}',
-                [],
-            )
+            return type(
+                "Result",
+                (),
+                {"data": {"desc": "ok", "tags": ["core"], "signatures": []}, "errors": []},
+            )()
 
-    monkeypatch.setattr("hippocampus.llm.client.HippoLLM", FakeLLM)
+    monkeypatch.setattr(
+        "hippocampus.tools.index_gen_phase1.create_llm_gateway",
+        lambda _config: FakeLLM(),
+    )
 
     phase0_data = {
         "signatures": SimpleNamespace(

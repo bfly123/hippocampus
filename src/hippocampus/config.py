@@ -56,8 +56,18 @@ class LLMTemperature(BaseModel):
     architect: float = 0.3
 
 
+class LLMReasoningEffort(BaseModel):
+    phase_1: str = ""
+    phase_2a: str = ""
+    phase_2b: str = ""
+    phase_3a: str = ""
+    phase_3b: str = ""
+    architect: str = ""
+
+
 class LLMConfig(BaseModel):
     phase_models: LLMPhaseModels = Field(default_factory=LLMPhaseModels)
+    phase_reasoning_effort: LLMReasoningEffort = Field(default_factory=LLMReasoningEffort)
     max_concurrent: int = DEFAULT_MAX_CONCURRENT
     retry_max: int = DEFAULT_RETRY_MAX
     timeout: int = DEFAULT_TIMEOUT

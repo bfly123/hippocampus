@@ -56,6 +56,7 @@ _RUNTIME_ARTIFACT_NAMES = frozenset(
         "hippocampus-index.json",
         "hippocampus-viz.html",
         "code-signatures.json",
+        "architect-metrics.json",
         "phase1-cache.json",
         "phase2-cache.json",
         "phase3-cache.json",

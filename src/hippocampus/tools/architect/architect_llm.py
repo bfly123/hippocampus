@@ -2,12 +2,11 @@
 
 from __future__ import annotations
 
-import json
 from pathlib import Path
 from typing import Optional
 
 from ...config import HippoConfig
-from ...llm.client import HippoLLM
+from ...llm.gateway import create_llm_gateway
 from ...llm.prompts import (
     build_architect_audit_messages,
     build_architect_plan_messages,
@@ -21,7 +20,8 @@ class LLMAnalyzer:
     """LLM-powered deep architecture analysis."""
 
     def __init__(self, config: HippoConfig):
-        self.llm = HippoLLM(config)
+        self.config = config
+        self.llm = create_llm_gateway(config)
 
     def _summarize_index(self, index: dict) -> str:
         parts = []
@@ -56,17 +56,9 @@ class LLMAnalyzer:
             summary = summary[:7900] + "\n... (truncated)"
         return summary
 
-    def _parse_json_response(self, text: str) -> dict:
-        payload = text.strip()
-        if "```json" in payload:
-            payload = payload.split("```json", 1)[1].split("```", 1)[0].strip()
-        elif "```" in payload:
-            payload = payload.split("```", 1)[1].split("```", 1)[0].strip()
-        return json.loads(payload)
-
     async def audit(self, index: dict, findings: list[RuleFinding]) -> dict:
         summary = self._summarize_index(index)
-        project_root = Path(self.llm.config.target).resolve()
+        project_root = Path(self.config.target).resolve()
         findings_text = (
             "\n".join(
                 f"- [{f.severity.value}] {f.rule_id}: {f.message}"
@@ -75,15 +67,15 @@ class LLMAnalyzer:
             or "No rule violations found."
         )
 
-        response = await self.llm.call(
-            phase="architect",
-            messages=build_architect_audit_messages(
+        result = await self.llm.run_json_task(
+            "architect",
+            build_architect_audit_messages(
                 project_root=project_root,
                 summary=summary,
                 findings_text=findings_text,
             ),
         )
-        return self._parse_json_response(response)
+        return result.data if isinstance(result.data, dict) else {}
 
     async def review_commits(
         self,
@@ -93,7 +85,7 @@ class LLMAnalyzer:
         repo_root: Optional[Path] = None,
     ) -> dict:
         summary = self._summarize_index(index)
-        project_root = repo_root.resolve() if repo_root is not None else Path(self.llm.config.target).resolve()
+        project_root = repo_root.resolve() if repo_root is not None else Path(self.config.target).resolve()
         findings_text = (
             "\n".join(
                 f"- [{f.severity.value}] {f.rule_id}: {f.message}"
@@ -122,9 +114,9 @@ class LLMAnalyzer:
         if len(content_diff) > 12000:
             content_diff = content_diff[:12000] + "\n... (truncated)"
 
-        response = await self.llm.call(
-            phase="architect",
-            messages=build_architect_review_messages(
+        result = await self.llm.run_json_task(
+            "architect",
+            build_architect_review_messages(
                 project_root=project_root,
                 summary=summary,
                 findings_text=findings_text,
@@ -133,17 +125,17 @@ class LLMAnalyzer:
                 content_diff=content_diff,
             ),
         )
-        return self._parse_json_response(response)
+        return result.data if isinstance(result.data, dict) else {}
 
     async def plan_feature(self, index: dict, description: str) -> dict:
         summary = self._summarize_index(index)
-        project_root = Path(self.llm.config.target).resolve()
-        response = await self.llm.call(
-            phase="architect",
-            messages=build_architect_plan_messages(
+        project_root = Path(self.config.target).resolve()
+        result = await self.llm.run_json_task(
+            "architect",
+            build_architect_plan_messages(
                 project_root=project_root,
                 summary=summary,
                 description=description,
             ),
         )
-        return self._parse_json_response(response)
+        return result.data if isinstance(result.data, dict) else {}

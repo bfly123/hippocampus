@@ -5,6 +5,7 @@ from typing import Any, Callable
 
 from ...config import HippoConfig
 from ...constants import HIPPO_DIR
+from ...llm.gateway import create_llm_gateway
 from ...tag_vocab import TagVocab, is_valid_new_tag, load_vocab, save_vocab
 from ...utils import is_doc, is_hidden, is_runtime_artifact
 from .index_gen_reporting import format_failed_file_summary
@@ -24,11 +25,10 @@ async def phase_1_impl(
     save_phase1_cache_fn: Callable[[Path, dict[str, Any]], None],
     detect_lang_hint_fn: Callable[[Path], str],
 ) -> dict[str, dict]:
-    from ...llm.client import HippoLLM
     from ...llm.prompts import build_phase_1_messages
-    from ...llm.validators import _try_parse_json, validate_phase_1
+    from ...llm.validators import validate_phase_1
 
-    llm = HippoLLM(config)
+    llm = create_llm_gateway(config)
     sig_doc = phase0_data["signatures"]
     compress = phase0_data["compress"]
     files_data = {
@@ -108,12 +108,12 @@ async def phase_1_impl(
         def validator(text: str) -> list[str]:
             return validate_phase_1(text, sig_count, vocab=vocab)
 
-        text, errors = await llm.call_with_retry("phase_1", messages, validator)
-        if errors:
+        result = await llm.run_json_task_with_retry("phase_1", messages, validator)
+        if result.errors:
             failed.append(fpath)
             return
 
-        data, _ = _try_parse_json(text)
+        data = result.data
         if not data:
             return
         _merge_tags_into_vocab(vocab, data.get("tags", []))
