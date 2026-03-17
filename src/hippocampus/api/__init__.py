@@ -75,7 +75,14 @@ def build_index(target: str | Path = ".", *, verbose: bool = False, no_llm: bool
         raise ValueError("hippocampus build_index requires LLM; no_llm mode is not supported")
     require_llm_configured(config)
     return asyncio.run(
-        run_index_pipeline(project_root, output_dir, config, verbose=verbose, no_llm=False)
+        run_index_pipeline(
+            project_root,
+            output_dir,
+            config,
+            verbose=verbose,
+            show_progress=verbose,
+            no_llm=False,
+        )
     )
 
 

@@ -67,6 +67,7 @@ async def test_run_index_pipeline_impl_prints_phase_durations(tmp_path: Path, ca
         output_dir=tmp_path / ".hippocampus",
         phase=None,
         verbose=True,
+        show_progress=True,
         no_llm=False,
         phase_0_fn=phase_0_fn,
         phase_1_fn=phase_1_fn,
@@ -83,3 +84,55 @@ async def test_run_index_pipeline_impl_prints_phase_durations(tmp_path: Path, ca
     assert "Phase 2 done in" in captured
     assert "Phase 3 done in" in captured
     assert "Phase 4 done in" in captured
+
+
+@pytest.mark.asyncio
+async def test_run_index_pipeline_impl_show_progress_without_verbose(tmp_path: Path, capsys):
+    async def phase_0_fn(target: Path, output_dir: Path, verbose: bool):
+        del target, output_dir, verbose
+        return {"compress": {}, "signatures": {}}
+
+    async def phase_1_fn(*args, **kwargs):
+        del args, kwargs
+        return {}
+
+    async def phase_2_fn(*args, **kwargs):
+        del args, kwargs
+        return [], {}
+
+    async def phase_3_fn(*args, **kwargs):
+        del args, kwargs
+        return [], {"overview": "", "architecture": "", "scale": {"files": 0, "modules": 0, "primary_lang": "python"}}
+
+    def phase_4_merge_fn(**kwargs):
+        del kwargs
+        return {
+            "stats": {"total_files": 0, "total_modules": 0, "total_signatures": 0},
+            "project": {"overview": "", "architecture": "", "scale": {"files": 0, "modules": 0, "primary_lang": "python"}},
+        }
+
+    async def cleanup_fn():
+        return None
+
+    await run_index_pipeline_impl(
+        target=tmp_path,
+        output_dir=tmp_path / ".hippocampus",
+        phase=None,
+        verbose=False,
+        show_progress=True,
+        no_llm=False,
+        phase_0_fn=phase_0_fn,
+        phase_1_fn=phase_1_fn,
+        phase_2_fn=phase_2_fn,
+        phase_3_fn=phase_3_fn,
+        phase_4_merge_fn=phase_4_merge_fn,
+        cleanup_fn=cleanup_fn,
+        config=object(),
+    )
+
+    captured = capsys.readouterr().out
+    assert "Phase 0: Local extraction ..." in captured
+    assert "Phase 1: Per-file LLM analysis ..." in captured
+    assert "Phase 2: Module clustering ..." in captured
+    assert "Phase 3: Module descriptions + project overview ..." in captured
+    assert "Phase 4: Merging index ..." in captured

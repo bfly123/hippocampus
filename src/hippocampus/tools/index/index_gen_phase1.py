@@ -19,6 +19,7 @@ async def phase_1_impl(
     output_dir: Path | None,
     dir_tree: str,
     verbose: bool,
+    show_progress: bool = False,
     *,
     content_hash_fn: Callable[[str], str],
     load_phase1_cache_fn: Callable[[Path], dict[str, Any]],
@@ -72,7 +73,7 @@ async def phase_1_impl(
 
     removed = [fp for fp in cache if fp not in files_data]
 
-    if verbose:
+    if verbose or show_progress:
         print(
             f"Phase 1 incremental: {reused} cached, "
             f"{len(to_process)} to process, "
@@ -124,6 +125,7 @@ async def phase_1_impl(
         to_process,
         process_file=process_file,
         verbose=verbose,
+        show_progress=show_progress,
     )
 
     for fp in removed:
@@ -132,7 +134,7 @@ async def phase_1_impl(
     save_phase1_cache_fn(output_dir, cache)
     save_vocab(output_dir, vocab)
 
-    if verbose and failed:
+    if (verbose or show_progress) and failed:
         print(
             format_failed_file_summary(
                 failed,

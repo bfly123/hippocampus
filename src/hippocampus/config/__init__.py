@@ -8,34 +8,30 @@ from typing import Any, Optional
 import yaml
 from pydantic import BaseModel, Field
 
-from .constants import (
+from ..constants import (
     DEFAULT_MAX_CONCURRENT,
     DEFAULT_RETRY_MAX,
     DEFAULT_TIMEOUT,
 )
-from .architec_llm_compat import (
-    load_architec_llm_as_hippo,
-    resolve_architec_llm_config_file,
-)
-from .config_gateway_models import (
+from .gateway_models import (
     apply_gateway_route_defaults,
     llm_model_explicit,
     llm_route_explicit,
     resolved_gateway_task_models,
 )
-from .config_gateway_support import (
+from .gateway_support import (
     discover_gateway_config,
     load_gateway_backend_profile,
 )
-from .config_merge_support import (
+from .merge_support import (
     infer_project_root,
     load_yaml_dict,
     merge_dicts,
     merge_dicts_skipping_empty_defaults,
     normalize_str,
 )
-from .integration.resource_paths import resolve_hippo_llm_config_file
-from .user_llm_config import load_user_llm_config
+from ..integration.llmgateway_runtime import load_user_gateway_runtime_profile
+from ..user_llm_config import load_user_llm_config, resolve_user_llm_config_file
 
 
 class LLMPhaseModels(BaseModel):
@@ -65,9 +61,23 @@ class LLMReasoningEffort(BaseModel):
     architect: str = ""
 
 
+class LLMPhaseTiers(BaseModel):
+    phase_1: str = "weak"
+    phase_2a: str = "strong"
+    phase_2b: str = "weak"
+    phase_3a: str = "weak"
+    phase_3b: str = "strong"
+    architect: str = "strong"
+
+
 class LLMConfig(BaseModel):
+    phase_tiers: LLMPhaseTiers = Field(default_factory=LLMPhaseTiers)
     phase_models: LLMPhaseModels = Field(default_factory=LLMPhaseModels)
     phase_reasoning_effort: LLMReasoningEffort = Field(default_factory=LLMReasoningEffort)
+    strong_model: str = ""
+    weak_model: str = ""
+    strong_reasoning_effort: str = ""
+    weak_reasoning_effort: str = ""
     max_concurrent: int = DEFAULT_MAX_CONCURRENT
     retry_max: int = DEFAULT_RETRY_MAX
     timeout: int = DEFAULT_TIMEOUT
@@ -104,12 +114,7 @@ def _merge_user_llm_config(
     config_path: Optional[Path],
     project_root: Optional[Path],
 ) -> dict[str, Any]:
-    root = infer_project_root(config_path, project_root)
-    llm_cfg_path = resolve_hippo_llm_config_file(root)
-    user_raw = load_user_llm_config(llm_cfg_path)
-    base_raw = user_raw
-    if not base_raw:
-        base_raw = load_architec_llm_as_hippo(resolve_architec_llm_config_file(root))
+    base_raw = load_user_llm_config(resolve_user_llm_config_file())
     if not base_raw:
         return raw
 
@@ -152,21 +157,21 @@ def _apply_gateway_llm_defaults(cfg: HippoConfig, raw: dict[str, Any], cfg_path:
         default_phase_models=default_llm.phase_models.model_dump(),
     )
 
+    user_profile = load_user_gateway_runtime_profile()
+    if user_profile:
+        if not route_explicit:
+            apply_gateway_route_defaults(cfg, user_profile)
+        if not model_explicit:
+            _apply_gateway_model_defaults(cfg, user_profile)
+
     gw_path = discover_gateway_config(cfg_path.parent, cfg.llm.gateway_config_path)
-    if not gw_path:
-        return
-
-    profile = load_gateway_backend_profile(gw_path)
-    if not profile:
-        return
-
-    if not route_explicit:
-        apply_gateway_route_defaults(cfg, profile)
-
-    if model_explicit:
-        return
-
-    _apply_gateway_model_defaults(cfg, profile)
+    if gw_path:
+        profile = load_gateway_backend_profile(gw_path)
+        if profile:
+            if not route_explicit:
+                apply_gateway_route_defaults(cfg, profile)
+            if not model_explicit:
+                _apply_gateway_model_defaults(cfg, profile)
 
 
 def _load_config_from_raw(
@@ -201,7 +206,7 @@ def llm_is_configured(cfg: HippoConfig) -> bool:
     llm = cfg.llm
     base_url = normalize_str(llm.base_url or llm.api_base)
     api_key = normalize_str(llm.api_key)
-    model = normalize_str(llm.fallback_model)
+    model = normalize_str(llm.strong_model or llm.weak_model or llm.fallback_model)
     return bool(base_url and api_key and model)
 
 
@@ -210,12 +215,27 @@ def require_llm_configured(cfg: HippoConfig) -> None:
         return
     raise RuntimeError(
         "hippocampus requires LLM configuration. "
-        "Set ~/.hippocampus/hippocampus-llm.yaml or ~/.architec/architec-llm.yaml first."
+        "Set ~/.llmgateway/config.yaml and ~/.hippocampus/config.yaml first."
     )
 
 
 def default_config_yaml() -> str:
     """Generate default config.yaml content."""
     cfg = HippoConfig()
-    data = cfg.model_dump()
+    data = {
+        "target": cfg.target,
+        "output_dir": cfg.output_dir,
+        "llm": {
+            "phase_tiers": cfg.llm.phase_tiers.model_dump(),
+            "temperature": cfg.llm.temperature.model_dump(),
+        },
+        "trim_budget": cfg.trim_budget,
+        "structure_prompt_profile": cfg.structure_prompt_profile,
+        "structure_prompt_map_tokens": cfg.structure_prompt_map_tokens,
+        "structure_prompt_deep_tokens": cfg.structure_prompt_deep_tokens,
+        "structure_prompt_max_tokens": cfg.structure_prompt_max_tokens,
+        "structure_prompt_max_chars": cfg.structure_prompt_max_chars,
+        "structure_prompt_llm_enhance": cfg.structure_prompt_llm_enhance,
+        "structure_prompt_archetype": cfg.structure_prompt_archetype,
+    }
     return yaml.dump(data, default_flow_style=False, allow_unicode=True)

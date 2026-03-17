@@ -43,6 +43,7 @@ async def _enrich_modules(
     modules: list[dict],
     *,
     verbose: bool,
+    show_progress: bool,
     cached_3a: dict[str, dict],
     module_files_map: dict[str, list[str]],
     phase1_results: dict[str, dict],
@@ -83,6 +84,7 @@ async def _enrich_modules(
             requests=requests,
             validators=validators,
             verbose=verbose,
+            show_progress=show_progress,
             label="Phase 3a",
             detail=f"{len(pending)} module(s)",
         )
@@ -146,6 +148,7 @@ async def _build_project_node(
     phase1_results: dict[str, dict],
     target: Path,
     verbose: bool,
+    show_progress: bool,
     content_hash_fn,
     build_project_overview_fn,
     llm_3,
@@ -159,10 +162,12 @@ async def _build_project_node(
         project_node = cached_3b["result"]
         project_node["scale"]["files"] = len(phase1_results)
         project_node["scale"]["modules"] = len(enriched_modules)
-        if verbose:
+        if verbose or show_progress:
             print("Phase 3b incremental: cache hit, 0 LLM calls")
         return project_node, cached_3b
 
+    if verbose or show_progress:
+        print("Phase 3b: building project overview")
     if verbose:
         print("Phase 3b incremental: cache miss, calling LLM")
         print(format_progress_line("Phase 3b", 0, 1, detail="project overview request"))
@@ -173,7 +178,7 @@ async def _build_project_node(
         phase1_results,
         target,
     )
-    if verbose:
+    if verbose or show_progress:
         print(
             format_progress_line(
                 "Phase 3b",
@@ -210,6 +215,7 @@ async def phase_3_impl(
     target: Path,
     output_dir: Path | None,
     verbose: bool,
+    show_progress: bool,
     load_phase3_cache_fn,
     phase3_module_input_hash_fn,
     content_hash_fn,
@@ -222,7 +228,7 @@ async def phase_3_impl(
     cache: dict[str, Any] = load_phase3_cache_fn(output_dir) if output_dir else {}
     cached_3a: dict[str, dict] = cache.get("phase_3a", {})
     cached_3b: dict[str, Any] = cache.get("phase_3b", {})
-    if verbose:
+    if verbose or show_progress:
         print(
             f"Phase 3 plan: {len(modules)} module(s), "
             f"{len(file_to_module)} file assignments"
@@ -231,6 +237,7 @@ async def phase_3_impl(
     enriched_modules, reused_3a, called_3a = await _enrich_modules(
         modules,
         verbose=verbose,
+        show_progress=show_progress,
         cached_3a=cached_3a,
         module_files_map=_group_files_by_module(file_to_module),
         phase1_results=phase1_results,
@@ -240,7 +247,7 @@ async def phase_3_impl(
         llm_3=llm_3,
     )
     _prune_removed_modules(cached_3a, modules)
-    if verbose:
+    if verbose or show_progress:
         print(f"Phase 3a incremental: {reused_3a} cached, {called_3a} LLM calls")
 
     project_node, cached_3b = await _build_project_node(
@@ -249,6 +256,7 @@ async def phase_3_impl(
         phase1_results=phase1_results,
         target=target,
         verbose=verbose,
+        show_progress=show_progress,
         content_hash_fn=content_hash_fn,
         build_project_overview_fn=build_project_overview_fn,
         llm_3=llm_3,

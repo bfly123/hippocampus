@@ -10,8 +10,8 @@ from ...utils import read_json, write_json
 from .index_gen_reporting import format_phase_duration
 
 
-def log_phase_done(label: str, start_time: float, *, verbose: bool) -> None:
-    if verbose:
+def log_phase_done(label: str, start_time: float, *, verbose: bool, show_progress: bool) -> None:
+    if verbose or show_progress:
         duration = format_phase_duration(time.perf_counter() - start_time)
         print(f"{label} done in {duration}")
 
@@ -35,13 +35,14 @@ async def run_phase(
     label: str,
     *,
     verbose: bool,
+    show_progress: bool,
     runner: Callable[[], Awaitable[Any]],
 ):
-    if verbose:
+    if verbose or show_progress:
         print(f"{label} ...")
     started = time.perf_counter()
     result = await runner()
-    log_phase_done(label.split(":", 1)[0], started, verbose=verbose)
+    log_phase_done(label.split(":", 1)[0], started, verbose=verbose, show_progress=show_progress)
     return result
 
 
@@ -57,10 +58,11 @@ def local_only_index(phase_4_merge_fn, *, phase0_data, target: Path) -> dict:
     )
 
 
-async def run_phase_0(phase_0_fn, *, target: Path, output_dir: Path, verbose: bool):
+async def run_phase_0(phase_0_fn, *, target: Path, output_dir: Path, verbose: bool, show_progress: bool):
     return await run_phase(
         "Phase 0: Local extraction",
         verbose=verbose,
+        show_progress=show_progress,
         runner=lambda: phase_0_fn(target, output_dir, verbose),
     )
 
@@ -74,10 +76,12 @@ async def run_phase_1(
     output_dir: Path,
     dir_tree: str,
     verbose: bool,
+    show_progress: bool,
 ):
     return await run_phase(
         "Phase 1: Per-file LLM analysis",
         verbose=verbose,
+        show_progress=show_progress,
         runner=lambda: phase_1_fn(
             config,
             phase0_data,
@@ -85,6 +89,7 @@ async def run_phase_1(
             output_dir=output_dir,
             dir_tree=dir_tree,
             verbose=verbose,
+            show_progress=show_progress,
         ),
     )
 
@@ -96,15 +101,18 @@ async def run_phase_2(
     phase1_results,
     output_dir: Path,
     verbose: bool,
+    show_progress: bool,
 ):
     return await run_phase(
         "Phase 2: Module clustering",
         verbose=verbose,
+        show_progress=show_progress,
         runner=lambda: phase_2_fn(
             config,
             phase1_results,
             output_dir=output_dir,
             verbose=verbose,
+            show_progress=show_progress,
         ),
     )
 
@@ -119,10 +127,12 @@ async def run_phase_3(
     target: Path,
     output_dir: Path,
     verbose: bool,
+    show_progress: bool,
 ):
     return await run_phase(
         "Phase 3: Module descriptions + project overview",
         verbose=verbose,
+        show_progress=show_progress,
         runner=lambda: phase_3_fn(
             config,
             modules,
@@ -131,6 +141,7 @@ async def run_phase_3(
             target,
             output_dir=output_dir,
             verbose=verbose,
+            show_progress=show_progress,
         ),
     )
 
@@ -145,8 +156,9 @@ def merge_index(
     project_node,
     target: Path,
     verbose: bool,
+    show_progress: bool,
 ) -> dict:
-    if verbose:
+    if verbose or show_progress:
         print("Phase 4: Merging index ...")
     started = time.perf_counter()
     index = phase_4_merge_fn(
@@ -157,12 +169,12 @@ def merge_index(
         project_node=project_node,
         target=target,
     )
-    log_phase_done("Phase 4", started, verbose=verbose)
+    log_phase_done("Phase 4", started, verbose=verbose, show_progress=show_progress)
     return index
 
 
-def print_index_stats(index: dict, *, verbose: bool) -> None:
-    if not verbose:
+def print_index_stats(index: dict, *, verbose: bool, show_progress: bool) -> None:
+    if not verbose and not show_progress:
         return
     stats = index["stats"]
     print(

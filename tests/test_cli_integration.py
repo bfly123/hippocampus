@@ -7,6 +7,7 @@ import shutil
 from pathlib import Path
 
 import pytest
+import click
 from click.testing import CliRunner
 
 from hippocampus.cli import cli
@@ -23,7 +24,8 @@ class TestCliHelp:
         assert result.exit_code == 0
         assert "Hippocampus" in result.output
         assert "Quick start:" in result.output
-        assert "First-time setup: hippo onekey" in result.output
+        assert "Full generation: hippo ." in result.output
+        assert "Another repo: hippo /path/to/repo" in result.output
         assert "Incremental refresh: hippo update" in result.output
         assert "Manual" in result.output
         assert "steps:" in result.output
@@ -35,14 +37,25 @@ class TestCliHelp:
         assert "Core Workflow:" in result.output
         assert "Explore & Inspect:" in result.output
         assert "Advanced Tools:" in result.output
+        assert "\nonekey" not in result.output
 
-    def test_onekey_help(self, runner):
-        result = runner.invoke(cli, ["onekey", "--help"])
+    def test_path_invokes_hidden_onekey_flow(self, runner, tmp_path, monkeypatch):
+        command = cli.commands["onekey"]
+        original_callback = command.callback
+
+        @click.pass_context
+        def fake_callback(ctx, target_path, target_option, prompt_profile, snapshot_message, open_viz):
+            del ctx, prompt_profile, snapshot_message, open_viz
+            click.echo(f"default target={target_path or target_option or '.'}")
+
+        monkeypatch.setattr(command, "callback", fake_callback)
+        try:
+            result = runner.invoke(cli, [str(tmp_path)])
+        finally:
+            monkeypatch.setattr(command, "callback", original_callback)
+
         assert result.exit_code == 0
-        assert "architec-ready" in result.output
-        assert "outputs." in result.output
-        assert "--prompt-profile" in result.output
-        assert "--snapshot-message" in result.output
+        assert f"default target={tmp_path}" in result.output
 
     def test_update_help(self, runner):
         result = runner.invoke(cli, ["update", "--help"])

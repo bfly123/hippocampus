@@ -36,10 +36,11 @@ def _delta_files(
 def _log_partial_hit(
     *,
     verbose: bool,
+    show_progress: bool,
     delta_files: set[str],
     cached_modules: list[dict],
 ) -> None:
-    if verbose:
+    if verbose or show_progress:
         print(
             f"Phase 2 incremental: partial hit, {len(delta_files)} files to re-assign, "
             f"reusing {len(cached_modules)} modules"
@@ -49,12 +50,13 @@ def _log_partial_hit(
 def _log_cache_miss(
     *,
     verbose: bool,
+    show_progress: bool,
     change_ratio: float,
     added_files: set[str],
     changed_files: set[str],
     removed_files: set[str],
 ) -> None:
-    if verbose:
+    if verbose or show_progress:
         print(
             f"Phase 2 incremental: cache miss (change_ratio={change_ratio:.1%}, "
             f"added={len(added_files)}, changed={len(changed_files)}, "
@@ -67,6 +69,7 @@ async def phase2_incremental_impl(
     phase1_results: dict[str, dict],
     output_dir,
     verbose: bool,
+    show_progress: bool,
     phase2_input_hash_fn,
     load_phase2_cache_fn,
     content_hash_fn,
@@ -93,7 +96,7 @@ async def phase2_incremental_impl(
         and not delta_files
         and not removed_files
     ):
-        if verbose:
+        if verbose or show_progress:
             print("Phase 2 incremental: full cache hit, 0 LLM calls")
         return cached_modules, cached_file_to_module
 
@@ -102,6 +105,7 @@ async def phase2_incremental_impl(
     if can_partial:
         _log_partial_hit(
             verbose=verbose,
+            show_progress=show_progress,
             delta_files=delta_files,
             cached_modules=cached_modules,
         )
@@ -114,16 +118,23 @@ async def phase2_incremental_impl(
             phase1_results,
             file_to_module,
             verbose,
+            show_progress,
         )
     else:
         _log_cache_miss(
             verbose=verbose,
+            show_progress=show_progress,
             change_ratio=change_ratio,
             added_files=added_files,
             changed_files=changed_files,
             removed_files=removed_files,
         )
-        modules, file_to_module = await phase2_full_fn(config, phase1_results, verbose)
+        modules, file_to_module = await phase2_full_fn(
+            config,
+            phase1_results,
+            verbose,
+            show_progress,
+        )
 
     if output_dir:
         save_phase2_cache_fn(

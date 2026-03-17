@@ -16,10 +16,11 @@ def test_install_script_help():
     )
     assert result.returncode == 0
     assert "Usage: ./install.sh" in result.stdout
-    assert "hippocampus-llm.yaml" in result.stdout
-    assert "providers/tiers/tasks structure aligned with architec" in result.stdout
-    assert "manual config path" in result.stdout
-    assert ".architec/architec-llm.yaml" in result.stdout
+    assert "~/.hippocampus/config.yaml" in result.stdout
+    assert "~/.llmgateway/config.yaml" in result.stdout
+    assert "task-tier routing" in result.stdout
+    assert "manual gateway config path" in result.stdout
+    assert "reused as defaults" in result.stdout
     assert "llmgateway dependency" in result.stdout
 
 

@@ -36,12 +36,10 @@ def _provider_dict(cfg: HippoConfig) -> dict[str, object]:
 
 def test_user_llm_config_defaults_to_codex_style():
     payload = build_user_llm_config(
-        base_url="https://backend.example/v1",
-        api_key="secret",
         model="gpt-5.3-codex high",
     )
-    assert payload["providers"]["main"]["provider_type"] == "glm"
-    assert payload["providers"]["main"]["api_style"] == "openai_responses"
+    assert payload["tasks"]["phase_2a"]["tier"] == "strong"
+    assert "providers" not in payload
 
 
 def test_runtime_prefers_openai_responses_for_glm():
@@ -239,6 +237,52 @@ async def test_call_with_retry_raises_after_transport_retries(monkeypatch):
 
     with pytest.raises(RuntimeError, match="502 Bad Gateway"):
         await llm.run_task_with_retry("phase_2b", [{"role": "user", "content": "x"}], lambda _text: [])
+
+
+@pytest.mark.asyncio
+async def test_llm_service_generate_raises_clear_timeout(monkeypatch):
+    cfg = HippoConfig.model_validate(
+        {
+            "llm": {
+                "provider_type": "glm",
+                "api_style": "openai_responses",
+                "base_url": "https://backend.example/v1",
+                "api_key": "secret",
+                "timeout": 30,
+                "phase_models": {
+                    "phase_1": "openai/gpt-5.4",
+                    "phase_2a": "openai/gpt-5.4",
+                    "phase_2b": "openai/gpt-5.4",
+                    "phase_3a": "openai/gpt-5.4",
+                    "phase_3b": "openai/gpt-5.4",
+                    "architect": "openai/gpt-5.4",
+                },
+            }
+        }
+    )
+    service = LLMService(runtime_spec_from_hippo_config(cfg))
+
+    async def fake_complete_once(**kwargs):
+        del kwargs
+        return '{"ok": true}'
+
+    async def fake_wait_for(awaitable, timeout):
+        del timeout
+        close = getattr(awaitable, "close", None)
+        if callable(close):
+            close()
+        raise asyncio.TimeoutError()
+
+    monkeypatch.setattr(service, "_complete_once", fake_complete_once)
+    monkeypatch.setattr("llmgateway.service.asyncio.wait_for", fake_wait_for)
+
+    with pytest.raises(RuntimeError, match="LLM request timed out for task 'phase_2a'"):
+        await service.generate_text(
+            TaskRequest(
+                task="phase_2a",
+                messages=[{"role": "user", "content": "hello"}],
+            )
+        )
 
 
 def test_runtime_spec_from_hippo_config_exposes_generic_provider_and_tasks():

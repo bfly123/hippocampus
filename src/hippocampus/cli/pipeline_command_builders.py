@@ -179,6 +179,7 @@ def build_index_command():
                 cfg,
                 phase=phase_num,
                 verbose=ctx.obj["verbose"],
+                show_progress=not ctx.obj["quiet"],
                 no_llm=no_llm,
             )
         )
@@ -201,8 +202,9 @@ def build_index_command():
 
 
 def build_onekey_command(*, command_refs: dict[str, object], run_cmd):
-    @click.command("onekey")
-    @click.option("--target", default=".", help="Project root directory.")
+    @click.command("onekey", hidden=True)
+    @click.argument("target_path", required=False, default=None)
+    @click.option("--target", "target_option", default=None, help="Project root directory.")
     @click.option(
         "--prompt-profile",
         type=click.Choice(["auto", "map", "deep"]),
@@ -223,8 +225,9 @@ def build_onekey_command(*, command_refs: dict[str, object], run_cmd):
         help="Open the generated visualization in a browser.",
     )
     @click.pass_context
-    def onekey(ctx, target, prompt_profile, snapshot_message, open_viz):
+    def onekey(ctx, target_path, target_option, prompt_profile, snapshot_message, open_viz):
         """First-time setup and full artifact generation, including architec-ready outputs."""
+        target = str(target_path or target_option or ".")
         tgt = Path(target).resolve()
         out = tgt / HIPPO_DIR
         out.mkdir(parents=True, exist_ok=True)

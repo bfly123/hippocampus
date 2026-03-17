@@ -29,6 +29,7 @@ async def phase_2_impl(
     phase1_results: dict[str, dict],
     output_dir: Path | None = None,
     verbose: bool = False,
+    show_progress: bool = False,
 ) -> tuple[list[dict], dict[str, str]]:
     """Phase 2: Incremental module clustering."""
     return await phase_2_impl_runtime(
@@ -36,6 +37,7 @@ async def phase_2_impl(
         phase1_results=phase1_results,
         output_dir=output_dir,
         verbose=verbose,
+        show_progress=show_progress,
         phase2_input_hash_fn=_phase2_input_hash,
         load_phase2_cache_fn=_load_phase2_cache,
         content_hash_fn=_content_hash,
@@ -49,6 +51,7 @@ async def phase2_full(
     config: HippoConfig,
     phase1_results: dict[str, dict],
     verbose: bool = False,
+    show_progress: bool = False,
 ) -> tuple[list[dict], dict[str, str]]:
     """Run full Phase 2a + 2b LLM calls."""
     from ...llm.prompts import build_phase_2a_messages
@@ -68,6 +71,8 @@ async def phase2_full(
         project_root=project_root,
         file_summaries=file_summaries[:40000],
     )
+    if verbose or show_progress:
+        print(f"Phase 2a: clustering {len(phase1_results)} file summaries")
     if verbose:
         print(
             f"Phase 2a plan: {len(phase1_results)} file summaries, "
@@ -79,7 +84,7 @@ async def phase2_full(
     result_2a = await llm.run_json_task_with_retry("phase_2a", msg_2a, validate_phase_2a)
     modules_data = result_2a.data if isinstance(result_2a.data, dict) else None
     modules = modules_data.get("modules", []) if modules_data else []
-    if verbose:
+    if verbose or show_progress:
         print(
             format_progress_line(
                 "Phase 2a",
@@ -95,6 +100,7 @@ async def phase2_full(
         phase1_results,
         set(phase1_results.keys()),
         verbose=verbose,
+        show_progress=show_progress,
     )
     return modules, file_to_module
 
@@ -105,6 +111,7 @@ async def phase2_assign_files(
     phase1_results: dict[str, dict],
     files_to_assign: set[str],
     verbose: bool = False,
+    show_progress: bool = False,
 ) -> dict[str, str]:
     """Run Phase 2b: assign a set of files to modules via LLM."""
     llm = create_llm_gateway(config)
@@ -115,6 +122,10 @@ async def phase2_assign_files(
         phase1_results,
         files_to_assign,
     )
+    if verbose or show_progress:
+        print(
+            f"Phase 2b: assigning {len(files_to_assign)} file(s) to {len(modules)} module(s)"
+        )
     if verbose:
         batch_sizes = [len(batch) for batch in batch_files]
         print(
@@ -126,6 +137,7 @@ async def phase2_assign_files(
         requests=requests,
         validators=validators,
         verbose=verbose,
+        show_progress=show_progress,
         label="Phase 2b",
         detail=f"{len(files_to_assign)} files",
     )
@@ -149,9 +161,10 @@ async def phase2_partial_assign(
     phase1_results: dict[str, dict],
     file_to_module: dict[str, str],
     verbose: bool = False,
+    show_progress: bool = False,
 ) -> None:
     """Re-assign only delta files, mutating file_to_module in place."""
-    if verbose:
+    if verbose or show_progress:
         print(
             f"Phase 2 partial reassign: {len(delta_files)} changed file(s), "
             f"reusing {len(modules)} module(s)"
@@ -162,6 +175,7 @@ async def phase2_partial_assign(
         phase1_results,
         delta_files,
         verbose,
+        show_progress=show_progress,
     )
     file_to_module.update(new_assignments)
 

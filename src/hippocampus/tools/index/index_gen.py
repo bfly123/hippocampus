@@ -67,6 +67,7 @@ async def phase_1(
     output_dir: Path | None = None,
     dir_tree: str = "",
     verbose: bool = False,
+    show_progress: bool = False,
 ) -> dict[str, dict]:
     return await _phase_1_impl(
         config=config,
@@ -75,6 +76,7 @@ async def phase_1(
         output_dir=output_dir,
         dir_tree=dir_tree,
         verbose=verbose,
+        show_progress=show_progress,
         content_hash_fn=_content_hash,
         load_phase1_cache_fn=_load_phase1_cache,
         save_phase1_cache_fn=_save_phase1_cache,
@@ -87,11 +89,13 @@ async def phase_2(
     phase1_results: dict[str, dict],
     output_dir: Path | None = None,
     verbose: bool = False,
+    show_progress: bool = False,
 ) -> tuple[list[dict], dict[str, str]]:
     return await _phase2_incremental_impl(
         phase1_results=phase1_results,
         output_dir=output_dir,
         verbose=verbose,
+        show_progress=show_progress,
         phase2_input_hash_fn=_phase2_input_hash,
         load_phase2_cache_fn=_load_phase2_cache,
         content_hash_fn=_content_hash,
@@ -106,8 +110,9 @@ async def _phase2_full(
     config: HippoConfig,
     phase1_results: dict[str, dict],
     verbose: bool = False,
+    show_progress: bool = False,
 ) -> tuple[list[dict], dict[str, str]]:
-    return await _phase2_full_impl(config, phase1_results, verbose)
+    return await _phase2_full_impl(config, phase1_results, verbose, show_progress=show_progress)
 
 
 async def _phase2_assign_files(
@@ -116,6 +121,7 @@ async def _phase2_assign_files(
     phase1_results: dict[str, dict],
     files_to_assign: set[str],
     verbose: bool = False,
+    show_progress: bool = False,
 ) -> dict[str, str]:
     return await _phase2_assign_files_impl(
         config,
@@ -123,6 +129,7 @@ async def _phase2_assign_files(
         phase1_results,
         files_to_assign,
         verbose,
+        show_progress=show_progress,
     )
 
 
@@ -133,6 +140,7 @@ async def _phase2_partial_assign(
     phase1_results: dict[str, dict],
     file_to_module: dict[str, str],
     verbose: bool = False,
+    show_progress: bool = False,
 ) -> None:
     await _phase2_partial_assign_impl(
         config,
@@ -141,6 +149,7 @@ async def _phase2_partial_assign(
         phase1_results,
         file_to_module,
         verbose,
+        show_progress=show_progress,
     )
 
 
@@ -152,6 +161,7 @@ async def phase_3(
     target: Path,
     output_dir: Path | None = None,
     verbose: bool = False,
+    show_progress: bool = False,
 ) -> tuple[list[dict], dict]:
     """Phase 3: Incremental module descriptions + project overview."""
     return await _phase_3_impl(
@@ -162,6 +172,7 @@ async def phase_3(
         target=target,
         output_dir=output_dir,
         verbose=verbose,
+        show_progress=show_progress,
         load_phase3_cache_fn=_load_phase3_cache,
         phase3_module_input_hash_fn=_phase3_module_input_hash,
         content_hash_fn=_content_hash,
@@ -291,6 +302,7 @@ async def run_index_pipeline(
     config: HippoConfig,
     phase: int | None = None,
     verbose: bool = False,
+    show_progress: bool = False,
     no_llm: bool = False,
 ) -> dict | None:
     return await _run_index_pipeline_impl(
@@ -298,6 +310,7 @@ async def run_index_pipeline(
         output_dir=output_dir,
         phase=phase,
         verbose=verbose,
+        show_progress=show_progress,
         no_llm=no_llm,
         phase_0_fn=phase_0,
         phase_1_fn=phase_1,

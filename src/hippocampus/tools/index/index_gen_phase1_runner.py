@@ -14,13 +14,14 @@ async def run_phase1_processors(
     *,
     process_file: Phase1Processor,
     verbose: bool,
+    show_progress: bool = False,
     progress_every: int = 10,
 ) -> None:
     total = len(files)
     if total == 0:
         return
 
-    if verbose:
+    if verbose or show_progress:
         print(format_progress_line("Phase 1 progress", 0, total, detail="started"))
 
     completed = 0
@@ -29,7 +30,7 @@ async def run_phase1_processors(
         for task in asyncio.as_completed(tasks):
             await task
             completed += 1
-            if verbose and (completed == total or completed % max(1, progress_every) == 0):
+            if (verbose or show_progress) and (completed == total or completed % max(1, progress_every) == 0):
                 print(format_progress_line("Phase 1 progress", completed, total))
     finally:
         for task in tasks:

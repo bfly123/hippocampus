@@ -6,7 +6,7 @@ import os
 from pathlib import Path
 from typing import Any
 
-from .config_merge_support import (
+from .merge_support import (
     load_yaml_dict,
     normalize_str,
     normalize_str_dict,

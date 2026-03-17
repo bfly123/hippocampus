@@ -4,7 +4,7 @@ import os
 from pathlib import Path
 
 
-HIPPOCAMPUS_LLM_CONFIG_NAME = "hippocampus-llm.yaml"
+HIPPOCAMPUS_LLM_CONFIG_NAME = "config.yaml"
 
 
 def user_config_dir() -> Path:

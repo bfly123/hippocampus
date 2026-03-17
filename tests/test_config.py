@@ -16,6 +16,47 @@ from hippocampus.config import (
 )
 
 
+def _write_gateway_user_config(
+    tmp_path: Path,
+    monkeypatch,
+    *,
+    base_url: str = "https://backend.example/v1",
+    api_key: str = "global-key",
+    max_concurrent: int = 20,
+    headers: dict[str, str] | None = None,
+) -> Path:
+    cfg_path = tmp_path / ".llmgateway-user" / "config.yaml"
+    monkeypatch.setenv("LLMGATEWAY_USER_CONFIG_DIR", str(cfg_path.parent))
+    cfg_path.parent.mkdir(parents=True, exist_ok=True)
+    cfg_path.write_text(
+        yaml.safe_dump(
+            {
+                "version": 1,
+                "provider": {
+                    "provider_type": "glm",
+                    "api_style": "openai_responses",
+                    "base_url": base_url,
+                    "api_key": api_key,
+                    "headers": dict(headers or {}),
+                    "model_map": {},
+                },
+                "settings": {
+                    "strong_model": "openai/gpt-4.1",
+                    "weak_model": "openai/gpt-4o-mini",
+                    "strong_reasoning_effort": "high",
+                    "weak_reasoning_effort": "low",
+                    "max_concurrent": max_concurrent,
+                    "retry_max": 3,
+                    "timeout": 30,
+                },
+            },
+            sort_keys=False,
+        ),
+        encoding="utf-8",
+    )
+    return cfg_path
+
+
 class TestDefaultConfigYaml:
     def test_is_valid_yaml(self):
         text = default_config_yaml()
@@ -54,31 +95,14 @@ class TestLoadConfig:
     def test_load_from_user_global_llm_config(self, tmp_path: Path, monkeypatch):
         user_dir = tmp_path / "user"
         monkeypatch.setenv("HIPPOCAMPUS_USER_CONFIG_DIR", str(user_dir))
-        (user_dir / "hippocampus-llm.yaml").parent.mkdir(parents=True)
-        (user_dir / "hippocampus-llm.yaml").write_text(
+        _write_gateway_user_config(tmp_path, monkeypatch, max_concurrent=32)
+        (user_dir / "config.yaml").parent.mkdir(parents=True)
+        (user_dir / "config.yaml").write_text(
             yaml.dump(
                 {
-                    "version": 1,
-                    "settings": {"max_concurrent": 32},
-                    "providers": {
-                        "main": {
-                            "provider_type": "glm",
-                            "api_style": "openai_responses",
-                            "base_url": "https://backend.example/v1",
-                            "api_key": "global-key",
-                        }
-                    },
                     "tiers": {
-                        "strong": {"candidates": [{"provider": "main", "model": "openai/gpt-4.1", "reasoning_effort": "high"}]},
-                        "small": {"candidates": [{"provider": "main", "model": "openai/gpt-4o-mini", "reasoning_effort": "low"}]},
-                    },
-                    "tasks": {
-                        "phase_1": {"tier": "small"},
-                        "phase_2a": {"tier": "strong"},
-                        "phase_2b": {"tier": "small"},
-                        "phase_3a": {"tier": "small"},
-                        "phase_3b": {"tier": "strong"},
-                        "architect": {"tier": "strong"},
+                        "strong": {"candidates": [{"model": "openai/gpt-4.1", "reasoning_effort": "high"}]},
+                        "weak": {"candidates": [{"model": "openai/gpt-4o-mini", "reasoning_effort": "low"}]},
                     },
                 }
             ),
@@ -89,6 +113,8 @@ class TestLoadConfig:
         assert cfg.llm.base_url == "https://backend.example/v1"
         assert cfg.llm.api_key == "global-key"
         assert cfg.llm.max_concurrent == 32
+        assert cfg.llm.strong_model == "openai/gpt-4.1"
+        assert cfg.llm.weak_model == "openai/gpt-4o-mini"
         assert cfg.llm.fallback_model == "openai/gpt-4o-mini"
         assert cfg.llm.phase_models.phase_2a == "openai/gpt-4.1"
         assert cfg.llm.phase_reasoning_effort.phase_1 == "low"
@@ -99,9 +125,10 @@ class TestLoadConfig:
         project.mkdir()
         user_dir = tmp_path / "user"
         monkeypatch.setenv("HIPPOCAMPUS_USER_CONFIG_DIR", str(user_dir))
-        (user_dir / "hippocampus-llm.yaml").parent.mkdir(parents=True)
-        (user_dir / "hippocampus-llm.yaml").write_text(
-            yaml.dump({"llm": {"base_url": "https://global.example/v1", "api_key": "global-key"}}),
+        _write_gateway_user_config(tmp_path, monkeypatch)
+        (user_dir / "config.yaml").parent.mkdir(parents=True)
+        (user_dir / "config.yaml").write_text(
+            yaml.dump({"tiers": {"weak": {"candidates": [{"model": "gpt-global-weak"}]}}}),
             encoding="utf-8",
         )
 
@@ -116,23 +143,22 @@ class TestLoadConfig:
         assert cfg.llm.base_url == "https://project.example/v1"
         assert cfg.llm.api_key == "project-key"
 
-    def test_load_from_architec_global_when_hippo_missing(self, tmp_path: Path, monkeypatch):
-        monkeypatch.setenv("HIPPOCAMPUS_USER_CONFIG_DIR", str(tmp_path / "hippo-user"))
-        arch_dir = tmp_path / "arch-user"
-        monkeypatch.setenv("ARCHITEC_USER_CONFIG_DIR", str(arch_dir))
-        (arch_dir / "architec-llm.yaml").parent.mkdir(parents=True)
-        (arch_dir / "architec-llm.yaml").write_text(
+    def test_load_from_hippocampus_user_llm_config(self, tmp_path: Path, monkeypatch):
+        user_dir = tmp_path / "hippo-user"
+        monkeypatch.setenv("HIPPOCAMPUS_USER_CONFIG_DIR", str(user_dir))
+        _write_gateway_user_config(
+            tmp_path,
+            monkeypatch,
+            base_url="https://arch.example/v1",
+            api_key="arch-key",
+        )
+        (user_dir / "config.yaml").parent.mkdir(parents=True)
+        (user_dir / "config.yaml").write_text(
             yaml.dump(
                 {
-                    "providers": {
-                        "main": {
-                            "base_url": "https://arch.example/v1",
-                            "api_key": "arch-key",
-                        }
-                    },
                     "tiers": {
-                        "strong": {"candidates": [{"provider": "main", "model": "gpt-5.3-codex high"}]},
-                        "small": {"candidates": [{"provider": "main", "model": "gpt-5.3-codex-medium"}]},
+                        "strong": {"candidates": [{"model": "gpt-5.3-codex high"}]},
+                        "weak": {"candidates": [{"model": "gpt-5.3-codex-medium"}]},
                     },
                 }
             ),
@@ -142,33 +168,30 @@ class TestLoadConfig:
         cfg = load_config(None, project_root=tmp_path / "project")
         assert cfg.llm.base_url == "https://arch.example/v1"
         assert cfg.llm.api_key == "arch-key"
-        assert cfg.llm.max_concurrent == 4
-        assert cfg.llm.timeout == 120
-        assert cfg.llm.phase_models.phase_1 == "gpt-5.3-codex-medium"
-        assert cfg.llm.phase_models.architect == "gpt-5.3-codex high"
+        assert cfg.llm.max_concurrent == 20
+        assert cfg.llm.timeout == 30
+        assert cfg.llm.phase_tiers.phase_1 == "weak"
+        assert cfg.llm.phase_tiers.architect == "strong"
 
-    def test_project_default_llm_values_do_not_override_architec(self, tmp_path: Path, monkeypatch):
-        monkeypatch.setenv("HIPPOCAMPUS_USER_CONFIG_DIR", str(tmp_path / "hippo-user"))
-        arch_dir = tmp_path / "arch-user"
-        monkeypatch.setenv("ARCHITEC_USER_CONFIG_DIR", str(arch_dir))
+    def test_project_default_llm_values_do_not_override_user_llm_config(self, tmp_path: Path, monkeypatch):
+        user_dir = tmp_path / "hippo-user"
+        monkeypatch.setenv("HIPPOCAMPUS_USER_CONFIG_DIR", str(user_dir))
+        _write_gateway_user_config(
+            tmp_path,
+            monkeypatch,
+            base_url="https://arch.example/v1",
+            api_key="arch-key",
+            headers={"x-test": "1"},
+        )
         project = tmp_path / "project"
         project.mkdir()
-        (arch_dir / "architec-llm.yaml").parent.mkdir(parents=True)
-        (arch_dir / "architec-llm.yaml").write_text(
+        (user_dir / "config.yaml").parent.mkdir(parents=True)
+        (user_dir / "config.yaml").write_text(
             yaml.dump(
                 {
-                    "providers": {
-                        "main": {
-                            "provider_type": "glm",
-                            "api_style": "openai_responses",
-                            "base_url": "https://arch.example/v1",
-                            "api_key": "arch-key",
-                            "headers": {"x-test": "1"},
-                        }
-                    },
                     "tiers": {
-                        "strong": {"candidates": [{"provider": "main", "model": "gpt-5.3-codex high"}]},
-                        "small": {"candidates": [{"provider": "main", "model": "gpt-5.3-codex-medium"}]},
+                        "strong": {"candidates": [{"model": "gpt-5.3-codex high"}]},
+                        "weak": {"candidates": [{"model": "gpt-5.3-codex-medium"}]},
                     },
                 }
             ),
@@ -184,15 +207,14 @@ class TestLoadConfig:
         assert cfg.llm.api_key == "arch-key"
         assert cfg.llm.provider_type == "glm"
         assert cfg.llm.api_style == "openai_responses"
-        assert cfg.llm.max_concurrent == 4
-        assert cfg.llm.timeout == 120
+        assert cfg.llm.max_concurrent == 20
+        assert cfg.llm.timeout == 30
         assert cfg.llm.extra_headers == {"x-test": "1"}
-        assert cfg.llm.phase_models.phase_1 == "gpt-5.3-codex-medium"
-        assert cfg.llm.phase_models.architect == "gpt-5.3-codex high"
+        assert cfg.llm.phase_tiers.phase_1 == "weak"
+        assert cfg.llm.phase_tiers.architect == "strong"
 
     def test_auto_bind_from_gateway_monorepo_layout(self, tmp_path: Path, monkeypatch):
         monkeypatch.setenv("HIPPOCAMPUS_USER_CONFIG_DIR", str(tmp_path / "hippo-user"))
-        monkeypatch.setenv("ARCHITEC_USER_CONFIG_DIR", str(tmp_path / "arch-user"))
         project = tmp_path / "inner"
         project.mkdir()
         cfg_file = project / ".hippocampus" / "config.yaml"
@@ -237,7 +259,6 @@ class TestLoadConfig:
 
     def test_explicit_llm_route_not_overridden(self, tmp_path: Path, monkeypatch):
         monkeypatch.setenv("HIPPOCAMPUS_USER_CONFIG_DIR", str(tmp_path / "hippo-user"))
-        monkeypatch.setenv("ARCHITEC_USER_CONFIG_DIR", str(tmp_path / "arch-user"))
         project = tmp_path / "inner"
         project.mkdir()
         cfg_file = project / ".hippocampus" / "config.yaml"

@@ -16,6 +16,7 @@ async def run_json_requests_with_progress(
     requests: Sequence[TaskRequest],
     validators: Sequence[Validator | None],
     verbose: bool,
+    show_progress: bool,
     label: str,
     detail: str = "",
 ) -> list[JSONResult]:
@@ -26,7 +27,7 @@ async def run_json_requests_with_progress(
     if total == 0:
         return []
 
-    if verbose:
+    if verbose or show_progress:
         runtime = getattr(llm, "runtime", None)
         concurrency = getattr(runtime, "max_concurrent", "?")
         suffix = f", {detail}" if detail else ""
@@ -44,7 +45,7 @@ async def run_json_requests_with_progress(
         or not inspect.iscoroutinefunction(generate_text_with_retry)
     ):
         results = list(await llm.run_json_tasks_with_retry(list(requests), list(validators)))
-        if verbose:
+        if verbose or show_progress:
             print(format_progress_line(label, total, total, detail="completed"))
         return results
 
@@ -73,7 +74,7 @@ async def run_json_requests_with_progress(
             index, result = await task
             ordered[index] = result
             completed += 1
-            if verbose:
+            if verbose or show_progress:
                 print(format_progress_line(label, completed, total))
     finally:
         for task in pending:

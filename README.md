@@ -9,7 +9,7 @@ for large codebases.
 - Builds `.hippocampus/` artifacts from a repository.
 - Generates `hippocampus-index.json`, structure prompts, and HTML visualization.
 - Supports incremental refresh with `hippo update`.
-- Can emit `architect-metrics.json` for downstream `architec` scoring when
+- Can emit `architect-metrics.json` for downstream `archi` scoring when
   `architec` is installed.
 
 ## Install
@@ -24,7 +24,8 @@ The installer:
 
 - installs `hippocampus` from the current checkout
 - installs `llmgateway`, preferring `../llmgateway` and falling back to GitHub
-- can generate `~/.hippocampus/hippocampus-llm.yaml`
+- can generate `~/.llmgateway/config.yaml`
+- can generate `~/.hippocampus/config.yaml`
 
 ### Manual Install
 
@@ -32,24 +33,19 @@ The installer:
 python -m pip install -e ".[dev,repomap,llm]"
 ```
 
-If you want a ready-to-edit config file:
-
-```bash
-cp config/hippocampus-llm.example.yaml ~/.hippocampus/hippocampus-llm.yaml
-```
-
 ## Quick Start
 
 ```bash
 hippo --help
-hippo onekey --target /path/to/repo
+hippo .
+hippo /path/to/repo
 hippo update --target /path/to/repo
 hippo overview --target /path/to/repo
 ```
 
 ## Standard Outputs
 
-After `hippo onekey` or `hippo update`, the main artifacts live under
+After `hippo .` or `hippo update`, the main artifacts live under
 `.hippocampus/`:
 
 - `hippocampus-index.json`
@@ -63,42 +59,52 @@ After `hippo onekey` or `hippo update`, the main artifacts live under
 
 ## LLM Configuration
 
-The runtime config file is:
+The runtime config files are:
 
 ```bash
-~/.hippocampus/hippocampus-llm.yaml
+~/.llmgateway/config.yaml
+~/.hippocampus/config.yaml
 ```
 
-The simplified format is aligned with `architec` and uses:
+Responsibilities are split:
 
-- one provider
-- one API key
-- two model tiers: `strong` and `small`
-- visible `max_concurrent` setting
+- `~/.llmgateway/config.yaml`: provider, API key, base URL, concurrency, strong/weak model selection
+- `~/.hippocampus/config.yaml`: Hippo phase-to-tier mapping only
 
-Example:
+Minimal examples:
 
 ```yaml
+# ~/.llmgateway/config.yaml
 version: 1
 settings:
+  strong_model: gpt-5.4
+  weak_model: gpt-5.4
+  strong_reasoning_effort: high
+  weak_reasoning_effort: low
   max_concurrent: 30
+provider:
+  provider_type: glm
+  api_style: openai_responses
+  base_url: https://your-endpoint.example
+  api_key: sk-...
+```
 
-providers:
-  main:
-    base_url: https://your-endpoint.example
-    api_key: sk-...
-
-tiers:
-  strong:
-    candidates:
-      - provider: main
-        model: gpt-5.4
-        reasoning_effort: high
-  small:
-    candidates:
-      - provider: main
-        model: gpt-5.4
-        reasoning_effort: low
+```yaml
+# ~/.hippocampus/config.yaml
+version: 1
+tasks:
+  phase_1:
+    tier: weak
+  phase_2a:
+    tier: strong
+  phase_2b:
+    tier: weak
+  phase_3a:
+    tier: weak
+  phase_3b:
+    tier: strong
+  architect:
+    tier: strong
 ```
 
 ## Python API
@@ -116,13 +122,13 @@ generate_structure_prompt("/path/to/repo", profile="map")
 
 ## Architec Integration
 
-If `architec` is installed, `hippo onekey` and `hippo update` also generate:
+If `architec` is installed, `hippo .` and `hippo update` also generate:
 
 ```bash
 .hippocampus/architect-metrics.json
 ```
 
-This lets you run architecture scoring directly with `architec`.
+This lets you run architecture scoring directly with `archi`.
 
 ## Development
 

@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+
 import click
 from click.formatting import HelpFormatter
 
@@ -13,11 +15,12 @@ from .snapshot import register_history_commands, register_snapshot_commands
 class HippocampusGroup(click.Group):
     """CLI group that renders top-level commands in curated sections."""
 
+    DEFAULT_COMMAND = "onekey"
+
     COMMAND_SECTIONS: tuple[tuple[str, tuple[str, ...]], ...] = (
         (
             "Core Workflow",
             (
-                "onekey",
                 "update",
                 "init",
                 "sig-extract",
@@ -51,6 +54,32 @@ class HippocampusGroup(click.Group):
         ),
     )
 
+    @staticmethod
+    def _looks_like_path(token: str) -> bool:
+        if token in {".", ".."}:
+            return True
+        if token.startswith(("./", "../", "/", "~")):
+            return True
+        if "/" in token or "\\" in token:
+            return True
+        return Path(token).exists()
+
+    def resolve_command(
+        self,
+        ctx: click.Context,
+        args: list[str],
+    ) -> tuple[str | None, click.Command | None, list[str]]:
+        if args:
+            token = args[0]
+            cmd = self.get_command(ctx, token)
+            if cmd is not None:
+                return token, cmd, args[1:]
+            if not token.startswith("-") and self._looks_like_path(token):
+                default_cmd = self.get_command(ctx, self.DEFAULT_COMMAND)
+                if default_cmd is not None:
+                    return self.DEFAULT_COMMAND, default_cmd, args
+        return super().resolve_command(ctx, args)
+
     def format_commands(self, ctx: click.Context, formatter: HelpFormatter) -> None:
         rows_by_section: list[tuple[str, list[tuple[str, str]]]] = []
         seen: set[str] = set()
@@ -59,14 +88,21 @@ class HippocampusGroup(click.Group):
             rows: list[tuple[str, str]] = []
             for name in command_names:
                 cmd = self.get_command(ctx, name)
-                if cmd is None:
+                if cmd is None or getattr(cmd, "hidden", False):
                     continue
                 seen.add(name)
                 rows.append((name, cmd.get_short_help_str(formatter.width)))
             if rows:
                 rows_by_section.append((section_name, rows))
 
-        remaining = [name for name in self.list_commands(ctx) if name not in seen]
+        remaining = []
+        for name in self.list_commands(ctx):
+            if name in seen:
+                continue
+            cmd = self.get_command(ctx, name)
+            if cmd is None or getattr(cmd, "hidden", False):
+                continue
+            remaining.append(name)
         if remaining:
             rows_by_section.append(
                 (
@@ -95,6 +131,7 @@ class HippocampusGroup(click.Group):
 @click.group(
     cls=HippocampusGroup,
     context_settings={"help_option_names": ["-h", "--help"]},
+    subcommand_metavar="[PATH]|COMMAND [ARGS]...",
 )
 @click.option("--config", "config_path", default=None, help="Config file path.")
 @click.option("--output-dir", default=None, help="Output directory.")
@@ -106,13 +143,16 @@ def cli(ctx, config_path, output_dir, verbose, quiet):
 
     Quick start:
 
-      First-time setup: hippo onekey
+    \b
+      Full generation: hippo .
+      Another repo: hippo /path/to/repo
       Incremental refresh: hippo update
       Manual steps: hippo init / sig-extract / tree / index / structure-prompt
       Inspect outputs: hippo overview
 
     Standard outputs:
 
+    \b
       .hippocampus/hippocampus-index.json
       .hippocampus/code-signatures.json
       .hippocampus/tree.json

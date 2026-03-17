@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from .config_merge_support import (
+from .merge_support import (
     is_empty_config_value,
     normalize_str,
     normalize_str_dict,

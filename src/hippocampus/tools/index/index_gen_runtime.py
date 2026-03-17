@@ -34,6 +34,7 @@ async def run_index_pipeline_impl(
     output_dir: Path,
     phase: int | None,
     verbose: bool,
+    show_progress: bool,
     no_llm: bool,
     phase_0_fn: Callable[[Path, Path, bool], Awaitable[dict[str, Any]]],
     phase_1_fn: Callable[..., Awaitable[dict[str, dict]]],
@@ -51,12 +52,13 @@ async def run_index_pipeline_impl(
             target=target,
             output_dir=output_dir,
             verbose=verbose,
+            show_progress=show_progress,
         )
         if phase == 0:
             return None
 
     if no_llm:
-        if verbose:
+        if verbose or show_progress:
             print("Local-only mode: skipping LLM phases ...")
         index = local_only_index(phase_4_merge_fn, phase0_data=phase0_data, target=target)
         write_index(output_dir, index)
@@ -72,6 +74,7 @@ async def run_index_pipeline_impl(
             output_dir=output_dir,
             dir_tree=dir_tree,
             verbose=verbose,
+            show_progress=show_progress,
         )
         if phase == 1:
             return None
@@ -85,6 +88,7 @@ async def run_index_pipeline_impl(
             phase1_results=phase1_results,
             output_dir=output_dir,
             verbose=verbose,
+            show_progress=show_progress,
         )
         if phase == 2:
             return None
@@ -100,6 +104,7 @@ async def run_index_pipeline_impl(
             target=target,
             output_dir=output_dir,
             verbose=verbose,
+            show_progress=show_progress,
         )
         if phase == 3:
             return None
@@ -113,8 +118,9 @@ async def run_index_pipeline_impl(
         project_node=project_node,
         target=target,
         verbose=verbose,
+        show_progress=show_progress,
     )
     write_index(output_dir, index)
-    print_index_stats(index, verbose=verbose)
+    print_index_stats(index, verbose=verbose, show_progress=show_progress)
     await cleanup_fn()
     return index
