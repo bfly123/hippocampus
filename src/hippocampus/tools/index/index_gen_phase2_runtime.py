@@ -52,7 +52,12 @@ def _can_partial_reassign(
     total_files: int,
 ) -> bool:
     change_ratio = len(delta_files) / max(total_files, 1)
-    return bool(cached_modules) and change_ratio < 0.2 and not removed_files
+    return (
+        bool(cached_modules)
+        and change_ratio < 0.3
+        and len(delta_files) < 100
+        and not removed_files
+    )
 
 
 async def phase_2_impl_runtime(

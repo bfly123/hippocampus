@@ -2,12 +2,31 @@
 
 from __future__ import annotations
 
+import subprocess
 import tempfile
 from collections import Counter
 from pathlib import Path
 from typing import Any, Callable
 
 from ...utils import is_doc, is_hidden, is_runtime_artifact
+
+
+def get_git_changed_files(target: Path) -> set[str] | None:
+    """Get changed files from git diff. Returns None if not a git repo or on error."""
+    try:
+        result = subprocess.run(
+            ["git", "diff", "--name-only", "HEAD"],
+            cwd=target,
+            capture_output=True,
+            text=True,
+            timeout=5,
+        )
+        if result.returncode == 0:
+            changed = {line.strip() for line in result.stdout.strip().split("\n") if line.strip()}
+            return changed if changed else set()
+    except Exception:
+        pass
+    return None
 
 
 def detect_lang_hint(target: Path) -> str:
@@ -103,6 +122,10 @@ async def phase_0_local(
     from ..sig_extract import run_sig_extract
     from ...repomix.runner import run_repomix_compress
 
+    git_changed_files = get_git_changed_files(target)
+    if verbose and git_changed_files is not None:
+        print(f"Git diff detected: {len(git_changed_files)} changed files")
+
     sig_doc = run_sig_extract(target, output_dir, verbose=verbose)
 
     with tempfile.NamedTemporaryFile(
@@ -118,4 +141,5 @@ async def phase_0_local(
     return {
         "signatures": sig_doc,
         "compress": compress_data,
+        "git_changed_files": git_changed_files,
     }

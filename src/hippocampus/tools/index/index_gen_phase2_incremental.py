@@ -101,7 +101,12 @@ async def phase2_incremental_impl(
         return cached_modules, cached_file_to_module
 
     change_ratio = len(delta_files) / max(len(phase1_results), 1)
-    can_partial = cached_modules and change_ratio < 0.2 and not removed_files
+    can_partial = (
+        cached_modules
+        and change_ratio < 0.3
+        and len(delta_files) < 100
+        and not removed_files
+    )
     if can_partial:
         _log_partial_hit(
             verbose=verbose,

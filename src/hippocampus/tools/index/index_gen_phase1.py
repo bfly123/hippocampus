@@ -46,6 +46,8 @@ async def phase_1_impl(
         output_dir = target / HIPPO_DIR
     cache = load_phase1_cache_fn(output_dir)
 
+    git_changed_files = phase0_data.get("git_changed_files")
+
     vocab = load_vocab(output_dir)
     vocab_hash = vocab.content_hash()
 
@@ -62,7 +64,17 @@ async def phase_1_impl(
     to_process: list[str] = []
     results: dict[str, dict] = {}
     reused = 0
+    git_skipped = 0
     for fp in files_data:
+        # Git diff optimization: skip unchanged files
+        if git_changed_files is not None and fp not in git_changed_files:
+            cached = cache.get(fp)
+            if cached:
+                results[fp] = cached["result"]
+                reused += 1
+                git_skipped += 1
+                continue
+
         h = current_hashes[fp]
         cached = cache.get(fp)
         if cached and cached.get("hash") == h:
@@ -74,10 +86,11 @@ async def phase_1_impl(
     removed = [fp for fp in cache if fp not in files_data]
 
     if verbose or show_progress:
+        git_info = f", git_skipped={git_skipped}" if git_skipped > 0 else ""
         print(
             f"Phase 1 incremental: {reused} cached, "
             f"{len(to_process)} to process, "
-            f"{len(removed)} removed"
+            f"{len(removed)} removed{git_info}"
         )
 
     failed: list[str] = []
@@ -126,6 +139,7 @@ async def phase_1_impl(
         process_file=process_file,
         verbose=verbose,
         show_progress=show_progress,
+        max_inflight=max(1, int(getattr(config.llm, "max_concurrent", 1) or 1)),
     )
 
     for fp in removed:
