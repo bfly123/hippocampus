@@ -1,91 +1,81 @@
-# hippocampus
+# Hippocampus
 
-`hippo` is a code repository indexing and navigation toolkit. It builds a local
-project map, searchable index, structure prompts, and visualization artifacts
-for large codebases.
+[English](#english) | [中文](#中文)
 
-## What It Does
+---
 
-- Builds `.hippocampus/` artifacts from a repository.
-- Generates `hippocampus-index.json`, structure prompts, and HTML visualization.
-- Supports incremental refresh with `hippo update`.
-- Can emit `architect-metrics.json` for downstream `archi` scoring when
-  `architec` is installed.
+## 中文
 
-## Install
+这是个代码库架构图软件，可以生成代码地图（项目提示词）和代码导航（智能获取相关代码片段），以及更多功能，例如可视化等，供用户自己研究。
 
-### Quick Install
+## 核心功能
+
+- **代码地图生成**：自动分析代码库结构，生成项目提示词（structure prompt）
+- **智能索引**：构建可搜索的代码索引，支持快速导航和代码片段检索
+- **增量更新**：基于文件变更的智能缓存，只处理修改部分
+- **可视化**：生成交互式 HTML 架构可视化
+- **架构度量**：集成 `architec` 工具，输出架构质量评分
+
+## 安装
 
 ```bash
 ./install.sh
 ```
 
-The installer:
-
-- installs `hippocampus` from the current checkout
-- installs `llmgateway`, preferring `../llmgateway` and falling back to GitHub
-- can generate `~/.llmgateway/config.yaml`
-- can generate `~/.hippocampus/config.yaml`
-
-### Manual Install
+或手动安装：
 
 ```bash
 python -m pip install -e ".[dev,repomap,llm]"
 ```
 
-## Quick Start
+## 快速开始
 
 ```bash
-hippo --help
+# 分析当前目录
 hippo .
+
+# 分析指定仓库
 hippo /path/to/repo
-hippo update --target /path/to/repo
-hippo overview --target /path/to/repo
+
+# 增量更新
+hippo update
+
+# 强制全量刷新
+hippo refresh .
+
+# 查看输出概览
+hippo overview
 ```
 
-## Standard Outputs
+## 输出文件
 
-After `hippo .` or `hippo update`, the main artifacts live under
-`.hippocampus/`:
+运行后在 `.hippocampus/` 目录生成：
 
-- `hippocampus-index.json`
-- `code-signatures.json`
-- `tree.json`
-- `structure-prompt.md`
-- `structure-prompt-map.md`
-- `structure-prompt-deep.md`
-- `hippocampus-viz.html`
-- `architect-metrics.json` when `architec` is available
+- `hippocampus-index.json` - 完整代码索引
+- `structure-prompt.md` - 项目结构提示词
+- `structure-prompt-map.md` - 地图视图
+- `structure-prompt-deep.md` - 深度视图
+- `hippocampus-viz.html` - 可视化页面
+- `architect-metrics.json` - 架构度量（需安装 `architec`）
 
-## LLM Configuration
+## LLM 配置
 
-The runtime config files are:
+配置文件位置：
 
-```bash
-~/.llmgateway/config.yaml
-~/.hippocampus/config.yaml
-```
+- `~/.llmgateway/config.yaml` - LLM 提供商、API 密钥、并发设置
+- `~/.hippocampus/config.yaml` - Hippo 阶段到模型层级的映射
 
-Responsibilities are split:
-
-- `~/.llmgateway/config.yaml`: provider, API key, base URL, concurrency, strong/weak model selection
-- `~/.hippocampus/config.yaml`: Hippo phase-to-tier mapping only
-
-Minimal examples:
+最小配置示例：
 
 ```yaml
 # ~/.llmgateway/config.yaml
 version: 1
 settings:
-  strong_model: gpt-5.4
-  weak_model: gpt-5.4
-  strong_reasoning_effort: high
-  weak_reasoning_effort: low
+  strong_model: gpt-4
+  weak_model: gpt-3.5-turbo
   max_concurrent: 30
 provider:
-  provider_type: glm
-  api_style: openai_responses
-  base_url: https://your-endpoint.example
+  provider_type: openai
   api_key: sk-...
 ```
 
@@ -97,20 +87,11 @@ tasks:
     tier: weak
   phase_2a:
     tier: strong
-  phase_2b:
-    tier: weak
-  phase_3a:
-    tier: weak
   phase_3b:
-    tier: strong
-  architect:
     tier: strong
 ```
 
 ## Python API
-
-Stable import-facing APIs are exposed from `hippocampus` and
-`hippocampus.api`.
 
 ```python
 from hippocampus import build_tree, extract_signatures, generate_structure_prompt
@@ -120,31 +101,123 @@ build_tree("/path/to/repo")
 generate_structure_prompt("/path/to/repo", profile="map")
 ```
 
-## Architec Integration
-
-If `architec` is installed, `hippo .` and `hippo update` also generate:
-
-```bash
-.hippocampus/architect-metrics.json
-```
-
-This lets you run architecture scoring directly with `archi`.
-
-## Development
-
-Run a focused local test set with:
+## 开发
 
 ```bash
 python -m pip install -e ".[dev,repomap,llm]"
 pytest -q
 ```
 
-For installation help:
-
-```bash
-./install.sh --help
-```
-
 ## License
 
-This project is released under the MIT License. See [LICENSE](LICENSE).
+MIT License. See [LICENSE](LICENSE).
+
+---
+
+## English
+
+A codebase architecture mapping tool that generates code maps (structure prompts) and intelligent code navigation (smart code snippet retrieval), plus additional features like visualization for users to explore.
+
+### Core Features
+
+- **Code Map Generation**: Automatically analyze codebase structure and generate structure prompts
+- **Smart Indexing**: Build searchable code index for fast navigation and snippet retrieval
+- **Incremental Updates**: Intelligent caching based on file changes, only processes modified parts
+- **Visualization**: Generate interactive HTML architecture visualization
+- **Architecture Metrics**: Integrate with `architec` tool for architecture quality scoring
+
+### Installation
+
+```bash
+./install.sh
+```
+
+Or manual installation:
+
+```bash
+python -m pip install -e ".[dev,repomap,llm]"
+```
+
+### Quick Start
+
+```bash
+# Analyze current directory
+hippo .
+
+# Analyze specific repository
+hippo /path/to/repo
+
+# Incremental update
+hippo update
+
+# Force full refresh
+hippo refresh .
+
+# View output overview
+hippo overview
+```
+
+### Output Files
+
+After running, files are generated in `.hippocampus/` directory:
+
+- `hippocampus-index.json` - Complete code index
+- `structure-prompt.md` - Project structure prompt
+- `structure-prompt-map.md` - Map view
+- `structure-prompt-deep.md` - Deep view
+- `hippocampus-viz.html` - Visualization page
+- `architect-metrics.json` - Architecture metrics (requires `architec`)
+
+### LLM Configuration
+
+Configuration file locations:
+
+- `~/.llmgateway/config.yaml` - LLM provider, API key, concurrency settings
+- `~/.hippocampus/config.yaml` - Hippo phase-to-tier mapping
+
+Minimal configuration example:
+
+```yaml
+# ~/.llmgateway/config.yaml
+version: 1
+settings:
+  strong_model: gpt-4
+  weak_model: gpt-3.5-turbo
+  max_concurrent: 30
+provider:
+  provider_type: openai
+  api_key: sk-...
+```
+
+```yaml
+# ~/.hippocampus/config.yaml
+version: 1
+tasks:
+  phase_1:
+    tier: weak
+  phase_2a:
+    tier: strong
+  phase_3b:
+    tier: strong
+```
+
+### Python API
+
+```python
+from hippocampus import build_tree, extract_signatures, generate_structure_prompt
+
+extract_signatures("/path/to/repo")
+build_tree("/path/to/repo")
+generate_structure_prompt("/path/to/repo", profile="map")
+```
+
+### Development
+
+```bash
+python -m pip install -e ".[dev,repomap,llm]"
+pytest -q
+```
+
+### License
+
+MIT License. See [LICENSE](LICENSE).
