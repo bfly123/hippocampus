@@ -52,17 +52,14 @@ async def phase_1_impl(
     vocab_hash = vocab.content_hash()
 
     current_hashes: dict[str, str] = {}
-    for fp in files_data:
-        # Only compute hash for changed files
-        if git_changed_files is None or fp in git_changed_files:
-            content = files_data[fp]
-            file_sigs = sig_doc.files.get(fp)
-            sig_text = ""
-            if file_sigs:
-                sig_text = "|".join(
-                    f"{s.name}:{s.kind}:{s.line}" for s in file_sigs.signatures
-                )
-            current_hashes[fp] = content_hash_fn(content + sig_text + vocab_hash)
+    for fp, content in files_data.items():
+        file_sigs = sig_doc.files.get(fp)
+        sig_text = ""
+        if file_sigs:
+            sig_text = "|".join(
+                f"{s.name}:{s.kind}:{s.line}" for s in file_sigs.signatures
+            )
+        current_hashes[fp] = content_hash_fn(content + sig_text + vocab_hash)
 
     to_process: list[str] = []
     results: dict[str, dict] = {}
