@@ -5,6 +5,7 @@ from pathlib import Path
 import click
 
 from ..constants import HIPPO_DIR, INDEX_FILE
+from .target_compat import resolve_target_value, target_option_alias
 
 
 def _target_output_dir(target: str) -> Path:
@@ -64,11 +65,13 @@ def register_snapshot_commands(cli) -> click.Group:
     @snapshot_group.command("save")
     @click.option("--message", "-m", default=None, help="Optional snapshot message.")
     @click.argument("target", required=False, default=".")
+    @target_option_alias()
     @click.pass_context
-    def snapshot_save(ctx, message, target):
+    def snapshot_save(ctx, message, target, target_option):
         """Archive current index as a timestamped snapshot."""
         from ..tools.snapshot import save_snapshot
 
+        target = resolve_target_value(target, target_option)
         try:
             result = save_snapshot(_target_output_dir(target), message=message)
         except FileNotFoundError:
@@ -77,12 +80,14 @@ def register_snapshot_commands(cli) -> click.Group:
 
     @snapshot_group.command("list")
     @click.argument("target", required=False, default=".")
+    @target_option_alias()
     @click.pass_context
-    def snapshot_list(ctx, target):
+    def snapshot_list(ctx, target, target_option):
         """List all archived snapshots."""
         del ctx
         from ..tools.snapshot import list_snapshots
 
+        target = resolve_target_value(target, target_option)
         snapshots = list_snapshots(_target_output_dir(target))
         if not snapshots:
             click.echo("No snapshots found.")
@@ -101,12 +106,14 @@ def register_snapshot_commands(cli) -> click.Group:
     @click.argument("ref", default="latest")
     @click.option("--budget", default=4000, type=int, help="Token budget.")
     @click.argument("target", required=False, default=".")
+    @target_option_alias()
     @click.pass_context
-    def snapshot_show(ctx, ref, target, budget):
+    def snapshot_show(ctx, ref, target, target_option, budget):
         """Show a snapshot as a project overview."""
         from ..query.overview import build_overview
         from ..tools.snapshot import resolve_snapshot
 
+        target = resolve_target_value(target, target_option)
         out = _target_output_dir(target)
         try:
             index = resolve_snapshot(out, ref)
@@ -129,12 +136,14 @@ def register_history_commands(cli) -> None:
     @click.argument("old_ref", default="latest~1")
     @click.argument("new_ref", default="latest")
     @click.argument("target", required=False, default=".")
+    @target_option_alias()
     @click.pass_context
-    def diff(ctx, old_ref, new_ref, target):
+    def diff(ctx, old_ref, new_ref, target, target_option):
         """Compare two index versions."""
         from ..query.diff import build_diff
         from ..tools.snapshot import resolve_snapshot
 
+        target = resolve_target_value(target, target_option)
         out = _target_output_dir(target)
         try:
             old_index = resolve_snapshot(out, old_ref)
@@ -154,11 +163,13 @@ def register_history_commands(cli) -> None:
     @cli.command("stats")
     @click.option("--history", is_flag=True, help="Show cross-version trends.")
     @click.argument("target", required=False, default=".")
+    @target_option_alias()
     @click.pass_context
-    def stats(ctx, history, target):
+    def stats(ctx, history, target, target_option):
         """Show index statistics and optional history trends."""
         from ..query.stats import build_stats
 
+        target = resolve_target_value(target, target_option)
         out = _target_output_dir(target)
         if history:
             result, footer = _history_stats_result(out)

@@ -45,9 +45,9 @@ class TestCliHelp:
         original_callback = command.callback
 
         @click.pass_context
-        def fake_callback(ctx, target, prompt_profile, snapshot_message, open_viz):
+        def fake_callback(ctx, target, target_option, prompt_profile, snapshot_message, open_viz):
             del ctx, prompt_profile, snapshot_message, open_viz
-            click.echo(f"default target={target}")
+            click.echo(f"default target={target_option or target}")
 
         monkeypatch.setattr(command, "callback", fake_callback)
         try:

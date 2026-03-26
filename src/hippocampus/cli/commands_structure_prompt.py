@@ -6,6 +6,7 @@ import click
 
 from ..config import load_config
 from ..constants import CONFIG_FILE, HIPPO_DIR, STRUCTURE_PROMPT_FILE
+from .target_compat import resolve_target_value, target_option_alias
 
 
 def _resolve_config_for_target(ctx, target: Path):
@@ -56,6 +57,7 @@ def _run_prompt(out: Path, *, ctx, cfg, max_tokens: int, llm_enhance: bool, prof
 def register_structure_prompt_commands(cli) -> dict[str, object]:
     @cli.command("structure-prompt")
     @click.argument("target", required=False, default=".")
+    @target_option_alias()
     @click.option(
         "--max-tokens",
         type=click.IntRange(min=1),
@@ -79,8 +81,9 @@ def register_structure_prompt_commands(cli) -> dict[str, object]:
         help="Enable LLM navigation brief enhancement (default: from config).",
     )
     @click.pass_context
-    def structure_prompt(ctx, target, max_tokens, profile, output_name, llm_enhance):
+    def structure_prompt(ctx, target, target_option, max_tokens, profile, output_name, llm_enhance):
         """Generate structure prompt → structure-prompt.md."""
+        target = resolve_target_value(target, target_option)
         tgt = Path(target).resolve()
         out, cfg = _resolve_config_for_target(ctx, tgt)
         resolved_profile = _resolved_profile(cfg, profile)
@@ -108,6 +111,7 @@ def register_structure_prompt_commands(cli) -> dict[str, object]:
 
     @cli.command("structure-prompt-all")
     @click.argument("target", required=False, default=".")
+    @target_option_alias()
     @click.option(
         "--map-tokens",
         type=click.IntRange(min=1),
@@ -132,8 +136,9 @@ def register_structure_prompt_commands(cli) -> dict[str, object]:
         help="Enable LLM navigation brief enhancement (default: from config).",
     )
     @click.pass_context
-    def structure_prompt_all(ctx, target, map_tokens, deep_tokens, set_default, llm_enhance):
+    def structure_prompt_all(ctx, target, target_option, map_tokens, deep_tokens, set_default, llm_enhance):
         """Generate map + deep structure prompts in one run."""
+        target = resolve_target_value(target, target_option)
         tgt = Path(target).resolve()
         out, cfg = _resolve_config_for_target(ctx, tgt)
         resolved_map_tokens = _resolved_token_budget(cfg, "map", map_tokens)

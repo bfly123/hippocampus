@@ -7,15 +7,18 @@ from pathlib import Path
 import click
 
 from ..constants import HIPPO_DIR, INDEX_FILE
+from .target_compat import resolve_target_value, target_option_alias
 
 
 def register_query_commands(cli) -> None:
     @cli.command("overview")
     @click.option("--budget", default=4000, type=int, help="Token budget.")
     @click.argument("target", required=False, default=".")
+    @target_option_alias()
     @click.pass_context
-    def overview(ctx, target, budget):
+    def overview(ctx, target, target_option, budget):
         """Render layered project overview from index."""
+        target = resolve_target_value(target, target_option)
         tgt = Path(target).resolve()
         out = tgt / HIPPO_DIR
 
@@ -46,9 +49,11 @@ def register_query_commands(cli) -> None:
     )
     @click.option("--budget", default=2000, type=int, help="Token budget.")
     @click.argument("target", required=False, default=".")
+    @target_option_alias()
     @click.pass_context
-    def expand(ctx, path, target, level, budget):
+    def expand(ctx, path, target, target_option, level, budget):
         """Expand a module or path from the index."""
+        target = resolve_target_value(target, target_option)
         tgt = Path(target).resolve()
         out = tgt / HIPPO_DIR
 
@@ -74,9 +79,11 @@ def register_query_commands(cli) -> None:
     @click.option("--pattern", "-p", default=None, help="Substring pattern to search.")
     @click.option("--limit", "-n", default=10, type=int, help="Max results.")
     @click.argument("target", required=False, default=".")
+    @target_option_alias()
     @click.pass_context
-    def search(ctx, tags, pattern, limit, target):
+    def search(ctx, tags, pattern, limit, target, target_option):
         """Search indexed files by tags and/or keyword pattern."""
+        target = resolve_target_value(target, target_option)
         if not tags and not pattern:
             click.echo("Error: provide at least --tags or --pattern.")
             raise SystemExit(1)
@@ -110,9 +117,11 @@ def register_query_commands(cli) -> None:
         help="Review staged changes (default).",
     )
     @click.argument("target", required=False, default=".")
+    @target_option_alias()
     @click.pass_context
-    def review(ctx, staged, target):
+    def review(ctx, staged, target, target_option):
         """Review staged changes against architecture."""
+        target = resolve_target_value(target, target_option)
         if not staged:
             click.echo("Currently only --staged is supported.")
             return
@@ -135,9 +144,11 @@ def register_viz_command(cli) -> None:
     @cli.command("viz")
     @click.option("--open", "open_browser", is_flag=True, help="Open in browser.")
     @click.argument("target", required=False, default=".")
+    @target_option_alias()
     @click.pass_context
-    def viz(ctx, target, open_browser):
+    def viz(ctx, target, target_option, open_browser):
         """Generate interactive HTML visualization."""
+        target = resolve_target_value(target, target_option)
         tgt = Path(target).resolve()
         out = tgt / HIPPO_DIR
 

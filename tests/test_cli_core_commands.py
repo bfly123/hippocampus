@@ -55,6 +55,23 @@ def test_index_accepts_no_llm_option(tmp_path):
     assert result.exit_code == 0
 
 
+def test_init_accepts_hidden_target_option_alias(tmp_path):
+    runner = CliRunner()
+    result = runner.invoke(cli, ["init", "--target", str(tmp_path)])
+    assert result.exit_code == 0
+    assert (tmp_path / ".hippocampus" / "config.yaml").exists()
+
+
+def test_index_accepts_hidden_target_option_alias(tmp_path):
+    runner = CliRunner()
+    init_result = runner.invoke(cli, ["init", str(tmp_path)])
+    assert init_result.exit_code == 0
+
+    result = runner.invoke(cli, ["index", "--no-llm", "--target", str(tmp_path)])
+    assert result.exit_code == 0
+    assert (tmp_path / ".hippocampus" / "hippocampus-index.json").exists()
+
+
 def test_update_runs_incremental_refresh_without_llm(tmp_path):
     (tmp_path / "src").mkdir()
     (tmp_path / "src" / "demo.py").write_text("def hello():\n    return 'world'\n", encoding="utf-8")
@@ -102,8 +119,8 @@ def test_refresh_invokes_update_with_full(tmp_path, monkeypatch):
     update_cmd = cli.commands["update"]
     original_callback = update_cmd.callback
 
-    def fake_update(target, default_prompt, snapshot_message, open_viz, full, no_llm):
-        seen["target"] = target
+    def fake_update(target, target_option, default_prompt, snapshot_message, open_viz, full, no_llm):
+        seen["target"] = target_option or target
         seen["default_prompt"] = default_prompt
         seen["snapshot_message"] = snapshot_message
         seen["open_viz"] = open_viz

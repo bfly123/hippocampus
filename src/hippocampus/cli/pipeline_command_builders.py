@@ -7,6 +7,7 @@ from typing import Any
 import click
 
 from .pipeline_helpers import build_ranked_tag_report, run_pipeline_steps
+from .target_compat import resolve_target_value, target_option_alias
 from ..config import load_config, require_llm_configured
 from ..constants import (
     CONFIG_FILE,
@@ -71,9 +72,11 @@ def build_repomap_command():
     @click.option("--files", "-f", multiple=True, help="Files to analyze (repeatable).")
     @click.option("--limit", "-n", default=50, type=int, help="Max symbols to show.")
     @click.argument("target", required=False, default=".")
+    @target_option_alias()
     @click.pass_context
-    def repomap(ctx, target, files, limit):
+    def repomap(ctx, target, target_option, files, limit):
         """Debug command: show Aider RepoMap symbol ranking."""
+        target = resolve_target_value(target, target_option)
         tgt = Path(target).resolve()
 
         from ..tools.repomap_adapter import HippoRepoMap, check_repomap_available
@@ -116,9 +119,11 @@ def build_trim_command():
     )
     @click.option("--focus", multiple=True, help="Files to prioritize.")
     @click.argument("target", required=False, default=".")
+    @target_option_alias()
     @click.pass_context
-    def trim(ctx, target, budget, ranking, focus):
+    def trim(ctx, target, target_option, budget, ranking, focus):
         """Dynamic trim with intelligent ranking."""
+        target = resolve_target_value(target, target_option)
         tgt = Path(target).resolve()
         out = tgt / HIPPO_DIR
         out.mkdir(parents=True, exist_ok=True)
@@ -157,9 +162,11 @@ def build_index_command():
         help="Run only local phases and skip all LLM work.",
     )
     @click.argument("target", required=False, default=".")
+    @target_option_alias()
     @click.pass_context
-    def index(ctx, target, phase_num, no_llm):
+    def index(ctx, target, target_option, phase_num, no_llm):
         """Generate unified index -> hippocampus-index.json."""
+        target = resolve_target_value(target, target_option)
         tgt = Path(target).resolve()
         out = tgt / HIPPO_DIR
         out.mkdir(parents=True, exist_ok=True)
@@ -204,6 +211,7 @@ def build_index_command():
 def build_generate_command(*, command_refs: dict[str, object], run_cmd):
     @click.command("_generate", hidden=True)
     @click.argument("target", required=False, default=".")
+    @target_option_alias()
     @click.option(
         "--prompt-profile",
         type=click.Choice(["auto", "map", "deep"]),
@@ -224,8 +232,9 @@ def build_generate_command(*, command_refs: dict[str, object], run_cmd):
         help="Open the generated visualization in a browser.",
     )
     @click.pass_context
-    def generate(ctx, target, prompt_profile, snapshot_message, open_viz):
+    def generate(ctx, target, target_option, prompt_profile, snapshot_message, open_viz):
         """Full artifact generation, including architec-ready outputs."""
+        target = resolve_target_value(target, target_option)
         tgt = Path(target).resolve()
         out = tgt / HIPPO_DIR
         out.mkdir(parents=True, exist_ok=True)
@@ -302,9 +311,11 @@ def build_update_command(*, command_refs: dict[str, object], trim_cmd, index_cmd
         help="Run only local phases and skip all LLM work.",
     )
     @click.argument("target", required=False, default=".")
+    @target_option_alias()
     @click.pass_context
-    def update(ctx, target, default_prompt, snapshot_message, open_viz, full, no_llm):
+    def update(ctx, target, target_option, default_prompt, snapshot_message, open_viz, full, no_llm):
         """Incrementally refresh outputs, including architec-ready artifacts."""
+        target = resolve_target_value(target, target_option)
         tgt = Path(target).resolve()
         out = tgt / HIPPO_DIR
         out.mkdir(parents=True, exist_ok=True)
@@ -378,6 +389,7 @@ def build_update_command(*, command_refs: dict[str, object], trim_cmd, index_cmd
 def build_refresh_command(*, update_cmd):
     @click.command("refresh")
     @click.argument("target", required=False, default=".")
+    @target_option_alias()
     @click.option(
         "--default-prompt",
         type=click.Choice(["map", "deep", "keep"]),
@@ -398,8 +410,9 @@ def build_refresh_command(*, update_cmd):
         help="Open the generated visualization in a browser.",
     )
     @click.pass_context
-    def refresh(ctx, target, default_prompt, snapshot_message, open_viz):
+    def refresh(ctx, target, target_option, default_prompt, snapshot_message, open_viz):
         """Force a full refresh by clearing incremental caches before rebuilding."""
+        target = resolve_target_value(target, target_option)
         ctx.invoke(
             update_cmd,
             target=target,
@@ -423,9 +436,11 @@ def build_run_command(*, command_refs: dict[str, object], trim_cmd, index_cmd):
         help="Structure prompt profile for Step 7.",
     )
     @click.argument("target", required=False, default=".")
+    @target_option_alias()
     @click.pass_context
-    def run(ctx, target, prompt_profile):
+    def run(ctx, target, target_option, prompt_profile):
         """Run full pipeline: init -> sig-extract -> tree -> index -> structure prompt."""
+        target = resolve_target_value(target, target_option)
         tgt = Path(target).resolve()
         out = tgt / HIPPO_DIR
         out.mkdir(parents=True, exist_ok=True)

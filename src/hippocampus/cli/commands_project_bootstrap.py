@@ -7,6 +7,7 @@ import click
 from ..config import default_config_yaml, load_config
 from ..constants import CONFIG_FILE, HIPPO_DIR, QUERIES_DIR
 from ..resources import copy_packaged_queries
+from .target_compat import resolve_target_value, target_option_alias
 
 
 def _resolve_paths(config_path, output_dir, target):
@@ -35,9 +36,11 @@ def _resolve_paths(config_path, output_dir, target):
 def register_project_bootstrap_commands(cli) -> dict[str, object]:
     @cli.command()
     @click.argument("target", required=False, default=".")
+    @target_option_alias()
     @click.pass_context
-    def init(ctx, target):
+    def init(ctx, target, target_option):
         """Initialize .hippocampus/ directory with default config."""
+        target = resolve_target_value(target, target_option)
         target = Path(target).resolve()
         hippo_dir = target / HIPPO_DIR
         hippo_dir.mkdir(parents=True, exist_ok=True)
@@ -62,9 +65,11 @@ def register_project_bootstrap_commands(cli) -> dict[str, object]:
 
     @cli.command("sig-extract")
     @click.argument("target", required=False, default=".")
+    @target_option_alias()
     @click.pass_context
-    def sig_extract(ctx, target):
+    def sig_extract(ctx, target, target_option):
         """Extract code signatures → code-signatures.json."""
+        target = resolve_target_value(target, target_option)
         _cfg, _out, _tgt = _resolve_paths(
             ctx.obj["config_path"], ctx.obj["output_dir"], target,
         )
@@ -84,9 +89,11 @@ def register_project_bootstrap_commands(cli) -> dict[str, object]:
 
     @cli.command("tree")
     @click.argument("target", required=False, default=".")
+    @target_option_alias()
     @click.pass_context
-    def tree(ctx, target):
+    def tree(ctx, target, target_option):
         """Generate structure tree → tree.json."""
+        target = resolve_target_value(target, target_option)
         tgt = Path(target).resolve()
         out = tgt / HIPPO_DIR
         out.mkdir(parents=True, exist_ok=True)
@@ -105,9 +112,11 @@ def register_project_bootstrap_commands(cli) -> dict[str, object]:
 
     @cli.command("tree-diff")
     @click.argument("target", required=False, default=".")
+    @target_option_alias()
     @click.pass_context
-    def tree_diff(ctx, target):
+    def tree_diff(ctx, target, target_option):
         """Generate structure diff → tree-diff.json."""
+        target = resolve_target_value(target, target_option)
         tgt = Path(target).resolve()
         out = tgt / HIPPO_DIR
 
