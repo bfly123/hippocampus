@@ -20,8 +20,10 @@ from .index_gen_progress import run_json_requests_with_progress
 from .index_gen_reporting import format_phase_duration, format_progress_line
 from .index_gen_phase2_runtime import phase_2_impl_runtime
 
-_PHASE2B_BATCH_SIZE = 64
-_PHASE2B_MAX_SUMMARY_CHARS = 12000
+_PHASE2A_MAX_SUMMARY_CHARS = 32000
+_PHASE2B_BATCH_SIZE = 32
+_PHASE2B_MAX_SUMMARY_CHARS = 8000
+_PHASE2B_MAX_INFLIGHT = 2
 
 
 async def phase_2_impl(
@@ -69,7 +71,7 @@ async def phase2_full(
 
     msg_2a = build_phase_2a_messages(
         project_root=project_root,
-        file_summaries=file_summaries[:40000],
+        file_summaries=file_summaries[:_PHASE2A_MAX_SUMMARY_CHARS],
     )
     if verbose or show_progress:
         print(f"Phase 2a: clustering {len(phase1_results)} file summaries")
@@ -77,7 +79,7 @@ async def phase2_full(
         print(
             f"Phase 2a plan: {len(phase1_results)} file summaries, "
             f"{len(file_summaries)} chars before trim, "
-            f"{len(file_summaries[:40000])} chars sent"
+            f"{len(file_summaries[:_PHASE2A_MAX_SUMMARY_CHARS])} chars sent"
         )
         print(format_progress_line("Phase 2a", 0, 1, detail="global clustering request"))
     started = time.perf_counter()
@@ -140,6 +142,7 @@ async def phase2_assign_files(
         show_progress=show_progress,
         label="Phase 2b",
         detail=f"{len(files_to_assign)} files",
+        max_inflight=_PHASE2B_MAX_INFLIGHT,
     )
 
     for result_item, files_batch in zip(results, batch_files):

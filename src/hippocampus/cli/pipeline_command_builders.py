@@ -68,9 +68,9 @@ def _generate_architec_metrics_for_target(ctx: Any, target: str | Path) -> None:
 
 def build_repomap_command():
     @click.command("repomap")
-    @click.option("--target", default=".", help="Project root directory.")
     @click.option("--files", "-f", multiple=True, help="Files to analyze (repeatable).")
     @click.option("--limit", "-n", default=50, type=int, help="Max symbols to show.")
+    @click.argument("target", required=False, default=".")
     @click.pass_context
     def repomap(ctx, target, files, limit):
         """Debug command: show Aider RepoMap symbol ranking."""
@@ -107,7 +107,6 @@ def build_repomap_command():
 
 def build_trim_command():
     @click.command("trim")
-    @click.option("--target", default=".", help="Project root directory.")
     @click.option("--budget", default=10000, help="Token budget.")
     @click.option(
         "--ranking",
@@ -116,6 +115,7 @@ def build_trim_command():
         help="Ranking method: heuristic (fast), graph (accurate), symbol (experimental).",
     )
     @click.option("--focus", multiple=True, help="Files to prioritize.")
+    @click.argument("target", required=False, default=".")
     @click.pass_context
     def trim(ctx, target, budget, ranking, focus):
         """Dynamic trim with intelligent ranking."""
@@ -149,7 +149,6 @@ def build_trim_command():
 
 def build_index_command():
     @click.command("index")
-    @click.option("--target", default=".", help="Project root directory.")
     @click.option("--phase", "phase_num", default=None, type=int, help="Run only this phase (0-4).")
     @click.option(
         "--no-llm",
@@ -157,6 +156,7 @@ def build_index_command():
         hidden=True,
         help="Run only local phases and skip all LLM work.",
     )
+    @click.argument("target", required=False, default=".")
     @click.pass_context
     def index(ctx, target, phase_num, no_llm):
         """Generate unified index -> hippocampus-index.json."""
@@ -201,10 +201,9 @@ def build_index_command():
     return index
 
 
-def build_onekey_command(*, command_refs: dict[str, object], run_cmd):
-    @click.command("onekey", hidden=True)
-    @click.argument("target_path", required=False, default=None)
-    @click.option("--target", "target_option", default=None, help="Project root directory.")
+def build_generate_command(*, command_refs: dict[str, object], run_cmd):
+    @click.command("_generate", hidden=True)
+    @click.argument("target", required=False, default=".")
     @click.option(
         "--prompt-profile",
         type=click.Choice(["auto", "map", "deep"]),
@@ -215,7 +214,7 @@ def build_onekey_command(*, command_refs: dict[str, object], run_cmd):
     @click.option(
         "--snapshot-message",
         "-m",
-        default="onekey",
+        default="generate",
         show_default=True,
         help="Snapshot message saved after the initial generation completes.",
     )
@@ -225,9 +224,8 @@ def build_onekey_command(*, command_refs: dict[str, object], run_cmd):
         help="Open the generated visualization in a browser.",
     )
     @click.pass_context
-    def onekey(ctx, target_path, target_option, prompt_profile, snapshot_message, open_viz):
-        """First-time setup and full artifact generation, including architec-ready outputs."""
-        target = str(target_path or target_option or ".")
+    def generate(ctx, target, prompt_profile, snapshot_message, open_viz):
+        """Full artifact generation, including architec-ready outputs."""
         tgt = Path(target).resolve()
         out = tgt / HIPPO_DIR
         out.mkdir(parents=True, exist_ok=True)
@@ -266,14 +264,13 @@ def build_onekey_command(*, command_refs: dict[str, object], run_cmd):
             webbrowser.open(str(viz_path))
 
         if not ctx.obj["quiet"]:
-            click.echo("=== Onekey complete ===")
+            click.echo("=== Generation complete ===")
 
-    return onekey
+    return generate
 
 
 def build_update_command(*, command_refs: dict[str, object], trim_cmd, index_cmd):
     @click.command("update")
-    @click.option("--target", default=".", help="Project root directory.")
     @click.option(
         "--default-prompt",
         type=click.Choice(["map", "deep", "keep"]),
@@ -304,6 +301,7 @@ def build_update_command(*, command_refs: dict[str, object], trim_cmd, index_cmd
         hidden=True,
         help="Run only local phases and skip all LLM work.",
     )
+    @click.argument("target", required=False, default=".")
     @click.pass_context
     def update(ctx, target, default_prompt, snapshot_message, open_viz, full, no_llm):
         """Incrementally refresh outputs, including architec-ready artifacts."""
@@ -377,9 +375,46 @@ def build_update_command(*, command_refs: dict[str, object], trim_cmd, index_cmd
     return update
 
 
+def build_refresh_command(*, update_cmd):
+    @click.command("refresh")
+    @click.argument("target", required=False, default=".")
+    @click.option(
+        "--default-prompt",
+        type=click.Choice(["map", "deep", "keep"]),
+        default="map",
+        show_default=True,
+        help="Which generated prompt becomes structure-prompt.md after refresh.",
+    )
+    @click.option(
+        "--snapshot-message",
+        "-m",
+        default="refresh",
+        show_default=True,
+        help="Snapshot message saved after the refresh completes.",
+    )
+    @click.option(
+        "--open-viz",
+        is_flag=True,
+        help="Open the generated visualization in a browser.",
+    )
+    @click.pass_context
+    def refresh(ctx, target, default_prompt, snapshot_message, open_viz):
+        """Force a full refresh by clearing incremental caches before rebuilding."""
+        ctx.invoke(
+            update_cmd,
+            target=target,
+            default_prompt=default_prompt,
+            snapshot_message=snapshot_message,
+            open_viz=open_viz,
+            full=True,
+            no_llm=False,
+        )
+
+    return refresh
+
+
 def build_run_command(*, command_refs: dict[str, object], trim_cmd, index_cmd):
     @click.command("run")
-    @click.option("--target", default=".", help="Project root directory.")
     @click.option(
         "--prompt-profile",
         type=click.Choice(["auto", "map", "deep"]),
@@ -387,6 +422,7 @@ def build_run_command(*, command_refs: dict[str, object], trim_cmd, index_cmd):
         show_default=True,
         help="Structure prompt profile for Step 7.",
     )
+    @click.argument("target", required=False, default=".")
     @click.pass_context
     def run(ctx, target, prompt_profile):
         """Run full pipeline: init -> sig-extract -> tree -> index -> structure prompt."""

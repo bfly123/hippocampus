@@ -27,6 +27,7 @@ class TestCliHelp:
         assert "Full generation: hippo ." in result.output
         assert "Another repo: hippo /path/to/repo" in result.output
         assert "Incremental refresh: hippo update" in result.output
+        assert "Force full refresh: hippo refresh ." in result.output
         assert "Manual" in result.output
         assert "steps:" in result.output
         assert "hippo init / sig-extract / tree / index / structure-prompt" in result.output
@@ -39,14 +40,14 @@ class TestCliHelp:
         assert "Advanced Tools:" in result.output
         assert "\nonekey" not in result.output
 
-    def test_path_invokes_hidden_onekey_flow(self, runner, tmp_path, monkeypatch):
-        command = cli.commands["onekey"]
+    def test_path_invokes_hidden_generate_flow(self, runner, tmp_path, monkeypatch):
+        command = cli.commands["_generate"]
         original_callback = command.callback
 
         @click.pass_context
-        def fake_callback(ctx, target_path, target_option, prompt_profile, snapshot_message, open_viz):
+        def fake_callback(ctx, target, prompt_profile, snapshot_message, open_viz):
             del ctx, prompt_profile, snapshot_message, open_viz
-            click.echo(f"default target={target_path or target_option or '.'}")
+            click.echo(f"default target={target}")
 
         monkeypatch.setattr(command, "callback", fake_callback)
         try:
@@ -64,12 +65,21 @@ class TestCliHelp:
         assert "--default-prompt" in result.output
         assert "--snapshot-message" in result.output
         assert "--full" in result.output
+        assert "--target" not in result.output
         assert "--no-llm" not in result.output
+
+    def test_refresh_help(self, runner):
+        result = runner.invoke(cli, ["refresh", "--help"])
+        assert result.exit_code == 0
+        assert "Force a full refresh" in result.output
+        assert "--default-prompt" in result.output
+        assert "--snapshot-message" in result.output
+        assert "--target" not in result.output
 
     def test_init_help(self, runner):
         result = runner.invoke(cli, ["init", "--help"])
         assert result.exit_code == 0
-        assert "--target" in result.output
+        assert "--target" not in result.output
 
     def test_sig_extract_help(self, runner):
         result = runner.invoke(cli, ["sig-extract", "--help"])
@@ -127,15 +137,15 @@ class TestCliHelp:
 
 class TestCliInit:
     def test_init_creates_hippo_dir(self, runner, tmp_path):
-        result = runner.invoke(cli, ["init", "--target", str(tmp_path)])
+        result = runner.invoke(cli, ["init", str(tmp_path)])
         assert result.exit_code == 0
         hippo_dir = tmp_path / ".hippocampus"
         assert hippo_dir.is_dir()
         assert (hippo_dir / "config.yaml").exists()
 
     def test_init_idempotent(self, runner, tmp_path):
-        runner.invoke(cli, ["init", "--target", str(tmp_path)])
-        result = runner.invoke(cli, ["init", "--target", str(tmp_path)])
+        runner.invoke(cli, ["init", str(tmp_path)])
+        result = runner.invoke(cli, ["init", str(tmp_path)])
         assert result.exit_code == 0
         assert "already exists" in result.output
 
@@ -146,9 +156,9 @@ class TestCliSigExtract:
     def test_sig_extract_on_target(self, runner, target_path):
         """Run sig-extract on claude_codex, verify output."""
         # First init to set up queries
-        runner.invoke(cli, ["init", "--target", str(target_path)])
+        runner.invoke(cli, ["init", str(target_path)])
         result = runner.invoke(cli, [
-            "sig-extract", "--target", str(target_path),
+            "sig-extract", str(target_path),
         ])
         assert result.exit_code == 0, f"Failed: {result.output}"
         assert "signatures" in result.output
@@ -166,9 +176,9 @@ class TestCliTree:
 
     def test_tree_on_target(self, runner, target_path):
         """Run tree on claude_codex, verify output."""
-        runner.invoke(cli, ["init", "--target", str(target_path)])
+        runner.invoke(cli, ["init", str(target_path)])
         result = runner.invoke(cli, [
-            "tree", "--target", str(target_path),
+            "tree", str(target_path),
         ])
         assert result.exit_code == 0, f"Failed: {result.output}"
         assert "nodes" in result.output
@@ -188,7 +198,7 @@ class TestCliStructurePrompt:
         if not tree_file.exists():
             pytest.skip("tree.json not found, run tree test first")
         result = runner.invoke(cli, [
-            "structure-prompt", "--target", str(target_path),
+            "structure-prompt", str(target_path),
         ])
         assert result.exit_code == 0, f"Failed: {result.output}"
         assert "chars" in result.output

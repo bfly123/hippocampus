@@ -5,7 +5,7 @@ from pathlib import Path
 import click
 from click.testing import CliRunner
 
-from hippocampus.cli.pipeline_command_builders import build_onekey_command, build_run_command
+from hippocampus.cli.pipeline_command_builders import build_generate_command, build_run_command
 from hippocampus.integration.architec_metrics import (
     ArchitecMetricsUnavailable,
     generate_architec_metrics_artifact,
@@ -60,46 +60,46 @@ def test_generate_architec_metrics_artifact_skips_when_architec_missing(tmp_path
     assert status.output_path.name == "architect-metrics.json"
 
 
-def test_onekey_generates_architec_metrics_artifact(tmp_path, monkeypatch):
+def test_generate_command_generates_architec_metrics_artifact(tmp_path, monkeypatch):
     @click.command("init")
-    @click.option("--target")
+    @click.argument("target", required=False, default=".")
     def fake_init(target):
         return None
 
     @click.command("sig-extract")
-    @click.option("--target")
+    @click.argument("target", required=False, default=".")
     def fake_sig_extract(target):
         return None
 
     @click.command("tree")
-    @click.option("--target")
+    @click.argument("target", required=False, default=".")
     def fake_tree(target):
         return None
 
     @click.command("tree-diff")
-    @click.option("--target")
+    @click.argument("target", required=False, default=".")
     def fake_tree_diff(target):
         return None
 
     @click.command("trim")
-    @click.option("--target")
+    @click.argument("target", required=False, default=".")
     def fake_trim(target):
         return None
 
     @click.command("index")
-    @click.option("--target")
+    @click.argument("target", required=False, default=".")
     def fake_index(target):
         return None
 
     @click.command("structure-prompt")
-    @click.option("--target")
     @click.option("--profile")
+    @click.argument("target", required=False, default=".")
     def fake_prompt_single(target, profile):
         return None
 
     @click.command("structure-prompt-all")
-    @click.option("--target")
     @click.option("--set-default")
+    @click.argument("target", required=False, default=".")
     def fake_prompt(target, set_default):
         assert target == str(tmp_path)
         assert set_default == "keep"
@@ -146,14 +146,14 @@ def test_onekey_generates_architec_metrics_artifact(tmp_path, monkeypatch):
         index_cmd=fake_index,
     )
 
-    cmd = build_onekey_command(
+    cmd = build_generate_command(
         command_refs={"structure-prompt-all": fake_prompt},
         run_cmd=run_cmd,
     )
     runner = CliRunner()
     result = runner.invoke(
         cmd,
-        ["--target", str(tmp_path)],
+        [str(tmp_path)],
         obj={
             "quiet": False,
             "verbose": False,

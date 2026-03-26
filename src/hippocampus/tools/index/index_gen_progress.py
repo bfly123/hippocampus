@@ -5,7 +5,8 @@ import inspect
 from typing import Sequence
 
 from llmgateway import JSONResult, TaskRequest, Validator
-from llmgateway.json import try_parse_json
+
+from ...llm.validators import _try_parse_json as try_parse_json
 
 from .index_gen_reporting import format_progress_line
 
@@ -19,6 +20,7 @@ async def run_json_requests_with_progress(
     show_progress: bool,
     label: str,
     detail: str = "",
+    max_inflight: int | None = None,
 ) -> list[JSONResult]:
     if len(requests) != len(validators):
         raise ValueError("validators length must match requests length")
@@ -31,9 +33,12 @@ async def run_json_requests_with_progress(
         runtime = getattr(llm, "runtime", None)
         concurrency = getattr(runtime, "max_concurrent", "?")
         suffix = f", {detail}" if detail else ""
+        worker_suffix = ""
+        if max_inflight is not None:
+            worker_suffix = f", worker_limit={max(1, int(max_inflight))}"
         print(
             f"{label}: scheduled {total} request(s), "
-            f"max_concurrent={concurrency}{suffix}"
+            f"max_concurrent={concurrency}{worker_suffix}{suffix}"
         )
         print(format_progress_line(label, 0, total, detail="started"))
 
@@ -54,7 +59,11 @@ async def run_json_requests_with_progress(
         request: TaskRequest,
         validator: Validator | None,
     ) -> tuple[int, JSONResult]:
-        text, errors = await generate_text_with_retry(request, validator)
+        if semaphore is None:
+            text, errors = await generate_text_with_retry(request, validator)
+        else:
+            async with semaphore:
+                text, errors = await generate_text_with_retry(request, validator)
         data, _error = try_parse_json(text)
         return index, JSONResult(
             task=request.task,
@@ -62,6 +71,10 @@ async def run_json_requests_with_progress(
             data=data,
             errors=list(errors),
         )
+
+    semaphore = None
+    if max_inflight is not None:
+        semaphore = asyncio.Semaphore(max(1, int(max_inflight)))
 
     pending = [
         asyncio.create_task(worker(index, request, validator))

@@ -18,7 +18,7 @@ def _write_gateway_user_config(
     *,
     base_url: str = "https://backend.example/v1",
     api_key: str = "secret-key",
-    max_concurrent: int = 20,
+    max_concurrent: int = 12,
 ) -> Path:
     cfg_path = tmp_path / ".llmgateway-user" / "config.yaml"
     monkeypatch.setenv("LLMGATEWAY_USER_CONFIG_DIR", str(cfg_path.parent))
@@ -42,7 +42,7 @@ def _write_gateway_user_config(
                     "weak_reasoning_effort": "low",
                     "max_concurrent": max_concurrent,
                     "retry_max": 3,
-                    "timeout": 30,
+                    "timeout": 90,
                 },
             },
             sort_keys=False,
@@ -84,7 +84,7 @@ def test_write_and_load_user_llm_config(tmp_path: Path, monkeypatch):
     loaded = load_user_llm_config(cfg_path)
     assert loaded["llm"]["base_url"] == "https://backend.example/v1"
     assert loaded["llm"]["api_key"] == "secret-key"
-    assert loaded["llm"]["max_concurrent"] == 20
+    assert loaded["llm"]["max_concurrent"] == 12
     assert loaded["llm"]["phase_models"]["phase_1"] == "openai/gpt-4o-mini"
     assert loaded["llm"]["phase_models"]["phase_2a"] == "openai/gpt-4.1"
     assert loaded["llm"]["phase_reasoning_effort"]["phase_1"] == "low"

@@ -11,8 +11,8 @@ from ..constants import HIPPO_DIR, INDEX_FILE
 
 def register_query_commands(cli) -> None:
     @cli.command("overview")
-    @click.option("--target", default=".", help="Project root directory.")
     @click.option("--budget", default=4000, type=int, help="Token budget.")
+    @click.argument("target", required=False, default=".")
     @click.pass_context
     def overview(ctx, target, budget):
         """Render layered project overview from index."""
@@ -38,7 +38,6 @@ def register_query_commands(cli) -> None:
 
     @cli.command("expand")
     @click.argument("path")
-    @click.option("--target", default=".", help="Project root directory.")
     @click.option(
         "--level",
         default="L2",
@@ -46,6 +45,7 @@ def register_query_commands(cli) -> None:
         help="Expansion level.",
     )
     @click.option("--budget", default=2000, type=int, help="Token budget.")
+    @click.argument("target", required=False, default=".")
     @click.pass_context
     def expand(ctx, path, target, level, budget):
         """Expand a module or path from the index."""
@@ -73,7 +73,7 @@ def register_query_commands(cli) -> None:
     @click.option("--tags", "-t", multiple=True, help="Tags to match (repeatable).")
     @click.option("--pattern", "-p", default=None, help="Substring pattern to search.")
     @click.option("--limit", "-n", default=10, type=int, help="Max results.")
-    @click.option("--target", default=".", help="Project root directory.")
+    @click.argument("target", required=False, default=".")
     @click.pass_context
     def search(ctx, tags, pattern, limit, target):
         """Search indexed files by tags and/or keyword pattern."""
@@ -109,7 +109,7 @@ def register_query_commands(cli) -> None:
         hidden=True,
         help="Review staged changes (default).",
     )
-    @click.option("--target", default=".", help="Project root directory.")
+    @click.argument("target", required=False, default=".")
     @click.pass_context
     def review(ctx, staged, target):
         """Review staged changes against architecture."""
@@ -133,8 +133,8 @@ def register_query_commands(cli) -> None:
 
 def register_viz_command(cli) -> None:
     @cli.command("viz")
-    @click.option("--target", default=".", help="Project root directory.")
     @click.option("--open", "open_browser", is_flag=True, help="Open in browser.")
+    @click.argument("target", required=False, default=".")
     @click.pass_context
     def viz(ctx, target, open_browser):
         """Generate interactive HTML visualization."""

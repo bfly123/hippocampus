@@ -55,7 +55,7 @@ def _run_prompt(out: Path, *, ctx, cfg, max_tokens: int, llm_enhance: bool, prof
 
 def register_structure_prompt_commands(cli) -> dict[str, object]:
     @cli.command("structure-prompt")
-    @click.option("--target", default=".", help="Project root directory.")
+    @click.argument("target", required=False, default=".")
     @click.option(
         "--max-tokens",
         type=click.IntRange(min=1),
@@ -107,7 +107,7 @@ def register_structure_prompt_commands(cli) -> dict[str, object]:
         _echo_unless_quiet(ctx, f"Done: {len(md)} chars.")
 
     @cli.command("structure-prompt-all")
-    @click.option("--target", default=".", help="Project root directory.")
+    @click.argument("target", required=False, default=".")
     @click.option(
         "--map-tokens",
         type=click.IntRange(min=1),

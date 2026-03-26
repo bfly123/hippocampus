@@ -34,7 +34,7 @@ def _resolve_paths(config_path, output_dir, target):
 
 def register_project_bootstrap_commands(cli) -> dict[str, object]:
     @cli.command()
-    @click.option("--target", default=".", help="Project root directory.")
+    @click.argument("target", required=False, default=".")
     @click.pass_context
     def init(ctx, target):
         """Initialize .hippocampus/ directory with default config."""
@@ -61,7 +61,7 @@ def register_project_bootstrap_commands(cli) -> dict[str, object]:
         click.echo(f"Initialized {hippo_dir}")
 
     @cli.command("sig-extract")
-    @click.option("--target", default=".", help="Project root directory.")
+    @click.argument("target", required=False, default=".")
     @click.pass_context
     def sig_extract(ctx, target):
         """Extract code signatures → code-signatures.json."""
@@ -83,7 +83,7 @@ def register_project_bootstrap_commands(cli) -> dict[str, object]:
             click.echo(f"Done: {n_files} files, {n_sigs} signatures.")
 
     @cli.command("tree")
-    @click.option("--target", default=".", help="Project root directory.")
+    @click.argument("target", required=False, default=".")
     @click.pass_context
     def tree(ctx, target):
         """Generate structure tree → tree.json."""
@@ -104,7 +104,7 @@ def register_project_bootstrap_commands(cli) -> dict[str, object]:
             click.echo(f"Done: {count_nodes(doc.root)} nodes.")
 
     @cli.command("tree-diff")
-    @click.option("--target", default=".", help="Project root directory.")
+    @click.argument("target", required=False, default=".")
     @click.pass_context
     def tree_diff(ctx, target):
         """Generate structure diff → tree-diff.json."""

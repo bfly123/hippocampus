@@ -15,12 +15,13 @@ from .snapshot import register_history_commands, register_snapshot_commands
 class HippocampusGroup(click.Group):
     """CLI group that renders top-level commands in curated sections."""
 
-    DEFAULT_COMMAND = "onekey"
+    DEFAULT_COMMAND = "_generate"
 
     COMMAND_SECTIONS: tuple[tuple[str, tuple[str, ...]], ...] = (
         (
             "Core Workflow",
             (
+                "refresh",
                 "update",
                 "init",
                 "sig-extract",
@@ -147,6 +148,7 @@ def cli(ctx, config_path, output_dir, verbose, quiet):
       Full generation: hippo .
       Another repo: hippo /path/to/repo
       Incremental refresh: hippo update
+      Force full refresh: hippo refresh .
       Manual steps: hippo init / sig-extract / tree / index / structure-prompt
       Inspect outputs: hippo overview
 

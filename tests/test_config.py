@@ -22,7 +22,7 @@ def _write_gateway_user_config(
     *,
     base_url: str = "https://backend.example/v1",
     api_key: str = "global-key",
-    max_concurrent: int = 20,
+    max_concurrent: int = 12,
     headers: dict[str, str] | None = None,
 ) -> Path:
     cfg_path = tmp_path / ".llmgateway-user" / "config.yaml"
@@ -47,7 +47,7 @@ def _write_gateway_user_config(
                     "weak_reasoning_effort": "low",
                     "max_concurrent": max_concurrent,
                     "retry_max": 3,
-                    "timeout": 30,
+                    "timeout": 90,
                 },
             },
             sort_keys=False,
@@ -168,8 +168,8 @@ class TestLoadConfig:
         cfg = load_config(None, project_root=tmp_path / "project")
         assert cfg.llm.base_url == "https://arch.example/v1"
         assert cfg.llm.api_key == "arch-key"
-        assert cfg.llm.max_concurrent == 20
-        assert cfg.llm.timeout == 30
+        assert cfg.llm.max_concurrent == 12
+        assert cfg.llm.timeout == 90
         assert cfg.llm.phase_tiers.phase_1 == "weak"
         assert cfg.llm.phase_tiers.architect == "strong"
 
@@ -207,8 +207,8 @@ class TestLoadConfig:
         assert cfg.llm.api_key == "arch-key"
         assert cfg.llm.provider_type == "glm"
         assert cfg.llm.api_style == "openai_responses"
-        assert cfg.llm.max_concurrent == 20
-        assert cfg.llm.timeout == 30
+        assert cfg.llm.max_concurrent == 12
+        assert cfg.llm.timeout == 90
         assert cfg.llm.extra_headers == {"x-test": "1"}
         assert cfg.llm.phase_tiers.phase_1 == "weak"
         assert cfg.llm.phase_tiers.architect == "strong"
@@ -302,9 +302,9 @@ class TestHippoConfig:
 
     def test_llm_defaults(self):
         cfg = HippoConfig()
-        assert cfg.llm.max_concurrent == 20
+        assert cfg.llm.max_concurrent == 12
         assert cfg.llm.retry_max == 3
-        assert cfg.llm.timeout == 30
+        assert cfg.llm.timeout == 90
 
 
 class TestLLMPhaseModels:

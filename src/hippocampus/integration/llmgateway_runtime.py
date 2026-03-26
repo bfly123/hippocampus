@@ -1,11 +1,11 @@
 from __future__ import annotations
 
+import os
 from pathlib import Path
 from typing import Any
 
 from llmgateway.config import (
     load_user_config as load_gateway_user_config,
-    resolve_user_config_file as resolve_gateway_user_config_file,
     runtime_spec_from_dict,
 )
 
@@ -37,18 +37,26 @@ def runtime_profile_from_gateway_raw(raw: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def resolve_user_gateway_runtime_file(path: str | Path | None = None) -> Path:
+    if path is not None:
+        return Path(path).expanduser().resolve()
+    override_dir = str(os.environ.get("LLMGATEWAY_USER_CONFIG_DIR", "") or "").strip()
+    if override_dir:
+        return (Path(override_dir).expanduser().resolve() / "config.yaml").resolve()
+    explicit = str(os.environ.get("LLMGATEWAY_USER_CONFIG", "") or "").strip()
+    if explicit:
+        return Path(explicit).expanduser().resolve()
+    return (Path.home() / ".llmgateway" / "config.yaml").resolve()
+
+
 def load_user_gateway_runtime_profile(path: str | Path | None = None) -> dict[str, Any]:
-    raw = load_gateway_user_config(path)
+    raw = load_gateway_user_config(resolve_user_gateway_runtime_file(path))
     if not raw:
         return {}
     try:
         return runtime_profile_from_gateway_raw(raw)
     except Exception:
         return {}
-
-
-def resolve_user_gateway_runtime_file(path: str | Path | None = None) -> Path:
-    return resolve_gateway_user_config_file(path)
 
 
 __all__ = [

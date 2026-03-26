@@ -63,7 +63,7 @@ def register_snapshot_commands(cli) -> click.Group:
 
     @snapshot_group.command("save")
     @click.option("--message", "-m", default=None, help="Optional snapshot message.")
-    @click.option("--target", default=".", help="Project root directory.")
+    @click.argument("target", required=False, default=".")
     @click.pass_context
     def snapshot_save(ctx, message, target):
         """Archive current index as a timestamped snapshot."""
@@ -76,7 +76,7 @@ def register_snapshot_commands(cli) -> click.Group:
         _print_quiet_footer(ctx, f"Snapshot saved: {result['snapshot_id']}")
 
     @snapshot_group.command("list")
-    @click.option("--target", default=".", help="Project root directory.")
+    @click.argument("target", required=False, default=".")
     @click.pass_context
     def snapshot_list(ctx, target):
         """List all archived snapshots."""
@@ -99,8 +99,8 @@ def register_snapshot_commands(cli) -> click.Group:
 
     @snapshot_group.command("show")
     @click.argument("ref", default="latest")
-    @click.option("--target", default=".", help="Project root directory.")
     @click.option("--budget", default=4000, type=int, help="Token budget.")
+    @click.argument("target", required=False, default=".")
     @click.pass_context
     def snapshot_show(ctx, ref, target, budget):
         """Show a snapshot as a project overview."""
@@ -128,7 +128,7 @@ def register_history_commands(cli) -> None:
     @cli.command("diff")
     @click.argument("old_ref", default="latest~1")
     @click.argument("new_ref", default="latest")
-    @click.option("--target", default=".", help="Project root directory.")
+    @click.argument("target", required=False, default=".")
     @click.pass_context
     def diff(ctx, old_ref, new_ref, target):
         """Compare two index versions."""
@@ -153,7 +153,7 @@ def register_history_commands(cli) -> None:
 
     @cli.command("stats")
     @click.option("--history", is_flag=True, help="Show cross-version trends.")
-    @click.option("--target", default=".", help="Project root directory.")
+    @click.argument("target", required=False, default=".")
     @click.pass_context
     def stats(ctx, history, target):
         """Show index statistics and optional history trends."""
