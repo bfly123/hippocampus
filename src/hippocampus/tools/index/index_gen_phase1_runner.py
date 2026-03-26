@@ -16,6 +16,7 @@ async def run_phase1_processors(
     verbose: bool,
     show_progress: bool = False,
     progress_every: int = 10,
+    max_inflight: int | None = None,
 ) -> None:
     total = len(files)
     if total == 0:
@@ -25,13 +26,32 @@ async def run_phase1_processors(
         print(format_progress_line("Phase 1 progress", 0, total, detail="started"))
 
     completed = 0
-    tasks = [asyncio.create_task(process_file(path)) for path in files]
+    queue: asyncio.Queue[str] = asyncio.Queue()
+    for path in files:
+        queue.put_nowait(path)
+
+    worker_count = min(total, max(1, int(max_inflight or total)))
+
+    async def worker() -> None:
+        nonlocal completed
+        while True:
+            try:
+                path = queue.get_nowait()
+            except asyncio.QueueEmpty:
+                return
+            try:
+                await process_file(path)
+            finally:
+                completed += 1
+                if (verbose or show_progress) and (
+                    completed == total or completed % max(1, progress_every) == 0
+                ):
+                    print(format_progress_line("Phase 1 progress", completed, total))
+                queue.task_done()
+
+    tasks = [asyncio.create_task(worker()) for _ in range(worker_count)]
     try:
-        for task in asyncio.as_completed(tasks):
-            await task
-            completed += 1
-            if (verbose or show_progress) and (completed == total or completed % max(1, progress_every) == 0):
-                print(format_progress_line("Phase 1 progress", completed, total))
+        await asyncio.gather(*tasks)
     finally:
         for task in tasks:
             if not task.done():
