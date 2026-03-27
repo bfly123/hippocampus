@@ -5,8 +5,9 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from pathlib import Path
 
+from ..source_filter import should_include_tree_path
 from ..types import TreeDoc, TreeNode
-from ..utils import is_hidden, is_runtime_artifact, write_json
+from ..utils import write_json
 
 
 def _parse_indent(line: str) -> tuple[int, str]:
@@ -28,11 +29,17 @@ def parse_directory_structure(text: str) -> TreeNode:
     """Parse repomix directoryStructure text into a TreeNode tree."""
     root = TreeNode(id="dir:.", type="dir", name=".")
     stack: list[tuple[int, TreeNode]] = [(-1, root)]
+    skipped_dir_level: int | None = None
 
     for line in text.splitlines():
         level, name = _parse_indent(line)
         if level < 0 or not name:
             continue
+
+        if skipped_dir_level is not None:
+            if level > skipped_dir_level:
+                continue
+            skipped_dir_level = None
 
         is_dir = _is_dir_entry(name)
         clean_name = name.rstrip("/")
@@ -47,7 +54,9 @@ def parse_directory_structure(text: str) -> TreeNode:
         path_parts = [s[1].name for s in stack[1:]] + [clean_name]
         rel_path = "/".join(path_parts)
         rel_path_obj = Path(rel_path)
-        if is_hidden(rel_path_obj) or is_runtime_artifact(rel_path_obj):
+        if not should_include_tree_path(rel_path_obj):
+            if is_dir:
+                skipped_dir_level = level
             continue
 
         node_type = "dir" if is_dir else "file"

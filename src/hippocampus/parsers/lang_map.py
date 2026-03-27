@@ -28,7 +28,6 @@ EXTENSION_MAP: dict[str, str] = {
     ".dart": "dart",
     ".php": "php",
     ".el": "elisp",
-    ".elc": "elisp",
     ".ex": "elixir",
     ".exs": "elixir",
     ".elm": "elm",

@@ -54,7 +54,7 @@ class TestParseDirectoryStructure:
         root = parse_directory_structure(text)
         assert root.id == "dir:."
         assert root.type == "dir"
-        assert len(root.children) == 2  # src/ and README.md
+        assert len(root.children) == 1  # src/ only; docs are filtered
 
         src = root.children[0]
         assert src.type == "dir"
@@ -109,3 +109,17 @@ class TestParseDirectoryStructure:
         assert names == ["llm-proxy"]
         llm_proxy = root.children[0]
         assert [child.name for child in llm_proxy.children] == ["src"]
+
+    def test_tests_docs_and_build_dirs_are_filtered(self):
+        text = (
+            "src/\n"
+            "  app.py\n"
+            "tests/\n"
+            "  test_app.py\n"
+            "docs/\n"
+            "  architecture.md\n"
+            "dist/\n"
+            "  bundle.js\n"
+        )
+        root = parse_directory_structure(text)
+        assert [child.name for child in root.children] == ["src"]

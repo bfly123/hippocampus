@@ -8,7 +8,7 @@ from collections import Counter
 from pathlib import Path
 from typing import Any, Callable
 
-from ...utils import is_doc, is_hidden, is_runtime_artifact
+from ...source_filter import build_file_manifest, should_include_architecture_file, write_file_manifest
 
 
 def get_git_changed_files(target: Path) -> set[str] | None:
@@ -54,12 +54,7 @@ def build_local_phase1_results(
     files = set(compress.get("files", {}).keys()) | set(sig_doc.files.keys())
     results: dict[str, dict] = {}
     for fp in files:
-        rel = Path(fp)
-        if is_hidden(rel) or is_doc(rel):
-            continue
-        if is_runtime_artifact(rel):
-            continue
-        if rel.parts and rel.parts[0] == "vendor":
+        if not should_include_architecture_file(fp):
             continue
         results[fp] = {
             "desc": "",
@@ -127,6 +122,8 @@ async def phase_0_local(
         print(f"Git diff detected: {len(git_changed_files)} changed files")
 
     sig_doc = run_sig_extract(target, output_dir, verbose=verbose)
+    file_manifest = build_file_manifest(target)
+    write_file_manifest(output_dir, file_manifest)
 
     with tempfile.NamedTemporaryFile(
         suffix=".json",
@@ -141,5 +138,6 @@ async def phase_0_local(
     return {
         "signatures": sig_doc,
         "compress": compress_data,
+        "file_manifest": file_manifest,
         "git_changed_files": git_changed_files,
     }

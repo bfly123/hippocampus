@@ -6,8 +6,8 @@ from typing import Any, Callable
 from ...config import HippoConfig
 from ...constants import HIPPO_DIR
 from ...llm.gateway import create_llm_gateway
+from ...source_filter import should_include_architecture_file
 from ...tag_vocab import TagVocab, is_valid_new_tag, load_vocab, save_vocab
-from ...utils import is_doc, is_hidden, is_runtime_artifact
 from .index_gen_reporting import format_failed_file_summary
 from .index_gen_phase1_runner import run_phase1_processors
 
@@ -35,10 +35,7 @@ async def phase_1_impl(
     files_data = {
         fp: content
         for fp, content in compress.get("files", {}).items()
-        if not is_hidden(Path(fp))
-        and not is_doc(Path(fp))
-        and not is_runtime_artifact(Path(fp))
-        and not Path(fp).parts[0] == "vendor"
+        if should_include_architecture_file(fp)
     }
     lang_hint = detect_lang_hint_fn(target)
 

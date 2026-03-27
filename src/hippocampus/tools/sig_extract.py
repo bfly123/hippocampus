@@ -8,22 +8,19 @@ from pathlib import Path
 from ..parsers.lang_map import filename_to_lang
 from ..parsers.query_loader import find_queries_dir
 from ..parsers.ts_extract import extract_definitions
+from ..source_filter import should_include_architecture_file
 from ..types import CodeSignaturesDoc, FileSignatures, Signature
-from ..utils import is_hidden, write_json
+from ..utils import write_json
 
 
 def _collect_source_files(target: Path) -> list[Path]:
-    """Collect all source files under target, skipping hidden dirs and vendor."""
+    """Collect architecture source files under target."""
     files = []
     for p in sorted(target.rglob("*")):
         if not p.is_file():
             continue
         rel = p.relative_to(target)
-        if is_hidden(rel):
-            continue
-        if rel.parts and rel.parts[0] == "vendor":
-            continue
-        if filename_to_lang(str(p)) is not None:
+        if should_include_architecture_file(rel) and filename_to_lang(str(p)) is not None:
             files.append(p)
     return files
 

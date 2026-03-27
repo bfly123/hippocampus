@@ -21,6 +21,19 @@ class TestCollectSourceFiles:
         py_files = [f for f in files if f.suffix == ".py"]
         assert len(py_files) > 0
 
+    def test_skips_tests_virtualenv_and_generated_files(self, tmp_path):
+        (tmp_path / "src").mkdir()
+        (tmp_path / "tests").mkdir()
+        (tmp_path / ".venv" / "lib").mkdir(parents=True)
+        (tmp_path / "src" / "app.py").write_text("def run():\n    return 1\n", encoding="utf-8")
+        (tmp_path / "src" / "client_pb2.py").write_text("x = 1\n", encoding="utf-8")
+        (tmp_path / "tests" / "test_app.py").write_text("def test_run():\n    assert True\n", encoding="utf-8")
+        (tmp_path / ".venv" / "lib" / "noise.py").write_text("x = 1\n", encoding="utf-8")
+
+        files = [str(item.relative_to(tmp_path)) for item in _collect_source_files(tmp_path)]
+
+        assert files == ["src/app.py"]
+
     def test_skips_hidden_dirs(self, target_path):
         files = _collect_source_files(target_path)
         for f in files:
