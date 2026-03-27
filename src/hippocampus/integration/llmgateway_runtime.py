@@ -4,10 +4,16 @@ import os
 from pathlib import Path
 from typing import Any
 
+import yaml
 from llmgateway.config import (
     load_user_config as load_gateway_user_config,
+    resolve_env_refs,
     runtime_spec_from_dict,
 )
+
+
+def _compact_error(exc: Exception) -> str:
+    return " ".join(str(exc).split())
 
 
 def runtime_profile_from_gateway_raw(raw: dict[str, Any]) -> dict[str, Any]:
@@ -59,7 +65,49 @@ def load_user_gateway_runtime_profile(path: str | Path | None = None) -> dict[st
         return {}
 
 
+def describe_user_gateway_runtime_issue(path: str | Path | None = None) -> str | None:
+    config_path = resolve_user_gateway_runtime_file(path)
+    if not config_path.exists():
+        return None
+
+    try:
+        loaded = yaml.safe_load(config_path.read_text(encoding="utf-8"))
+    except Exception as exc:
+        return f"{config_path} cannot be parsed: {_compact_error(exc)}"
+
+    if loaded is None:
+        return f"{config_path} is empty."
+    if not isinstance(loaded, dict):
+        return f"{config_path} must contain a YAML object at the top level."
+
+    resolved = resolve_env_refs(loaded)
+    if not isinstance(resolved, dict):
+        return f"{config_path} must resolve to a YAML object."
+
+    try:
+        runtime = runtime_spec_from_dict(resolved)
+    except Exception as exc:
+        return f"{config_path} contains an invalid llmgateway runtime: {_compact_error(exc)}"
+
+    missing_fields: list[str] = []
+    if not str(runtime.provider.base_url or "").strip():
+        missing_fields.append("provider.base_url")
+    if not str(runtime.provider.api_key or "").strip():
+        missing_fields.append("provider.api_key")
+    if not any(
+        str(value or "").strip()
+        for value in (runtime.strong_model, runtime.weak_model, runtime.fallback_model)
+    ):
+        missing_fields.append(
+            "settings.strong_model / settings.weak_model / settings.fallback_model"
+        )
+    if missing_fields:
+        return f"{config_path} is missing required field(s): {', '.join(missing_fields)}"
+    return None
+
+
 __all__ = [
+    "describe_user_gateway_runtime_issue",
     "load_user_gateway_runtime_profile",
     "resolve_user_gateway_runtime_file",
     "runtime_profile_from_gateway_raw",

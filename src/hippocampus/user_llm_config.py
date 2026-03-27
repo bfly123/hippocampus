@@ -25,6 +25,10 @@ _TASK_TIER_DEFAULTS: dict[str, str] = {
 }
 
 
+def _compact_error(exc: Exception) -> str:
+    return " ".join(str(exc).split())
+
+
 def hippocampus_user_config_dir() -> Path:
     override = str(os.environ.get("HIPPOCAMPUS_USER_CONFIG_DIR", "") or "").strip()
     if override:
@@ -155,6 +159,30 @@ def _llm_payload_from_tasks_config(raw: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def describe_user_llm_config_issue(path: Path | None = None) -> str | None:
+    resolved_path = resolve_user_llm_config_file(path)
+    if not resolved_path.exists():
+        return None
+    try:
+        loaded = yaml.safe_load(resolved_path.read_text(encoding="utf-8"))
+    except Exception as exc:
+        return f"{resolved_path} cannot be parsed: {_compact_error(exc)}"
+    if loaded is None:
+        return f"{resolved_path} is empty."
+    if not isinstance(loaded, dict):
+        return f"{resolved_path} must contain a YAML object at the top level."
+    try:
+        resolved = resolve_env_refs(loaded)
+    except Exception as exc:
+        return f"{resolved_path} contains invalid environment references: {_compact_error(exc)}"
+    if not isinstance(resolved, dict):
+        return f"{resolved_path} must resolve to a YAML object."
+    tasks = resolved.get("tasks")
+    if tasks is not None and not isinstance(tasks, dict):
+        return f"{resolved_path} field 'tasks' must be an object."
+    return None
+
+
 def build_user_llm_config(
     *,
     model: str,
@@ -198,6 +226,7 @@ def write_user_llm_config(
 __all__ = [
     "HIPPOCAMPUS_LLM_CONFIG_NAME",
     "build_user_llm_config",
+    "describe_user_llm_config_issue",
     "hippocampus_user_config_dir",
     "load_user_llm_config",
     "resolve_env_refs",

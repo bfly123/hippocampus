@@ -5,6 +5,7 @@ from pathlib import Path
 import yaml
 
 from hippocampus.integration.llmgateway_runtime import (
+    describe_user_gateway_runtime_issue,
     load_user_gateway_runtime_profile,
     resolve_user_gateway_runtime_file,
 )
@@ -71,3 +72,51 @@ def test_load_user_gateway_runtime_profile_uses_user_config_path(
     assert profile["retry_max"] == 3
     assert profile["timeout"] == 90.0
     assert profile["transport_retries"] == 4
+
+
+def test_describe_user_gateway_runtime_issue_reports_yaml_error(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    user_dir = tmp_path / "gateway-user"
+    monkeypatch.setenv("LLMGATEWAY_USER_CONFIG_DIR", str(user_dir))
+    cfg_path = user_dir / "config.yaml"
+    cfg_path.parent.mkdir(parents=True, exist_ok=True)
+    cfg_path.write_text("provider: [\n", encoding="utf-8")
+
+    issue = describe_user_gateway_runtime_issue()
+
+    assert issue is not None
+    assert str(cfg_path) in issue
+    assert "cannot be parsed" in issue
+
+
+def test_describe_user_gateway_runtime_issue_reports_missing_required_fields(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    user_dir = tmp_path / "gateway-user"
+    monkeypatch.setenv("LLMGATEWAY_USER_CONFIG_DIR", str(user_dir))
+    cfg_path = user_dir / "config.yaml"
+    cfg_path.parent.mkdir(parents=True, exist_ok=True)
+    cfg_path.write_text(
+        yaml.safe_dump(
+            {
+                "version": 1,
+                "provider": {
+                    "provider_type": "openai",
+                    "api_style": "responses",
+                    "base_url": "https://backend.example/v1",
+                },
+                "settings": {},
+            },
+            sort_keys=False,
+        ),
+        encoding="utf-8",
+    )
+
+    issue = describe_user_gateway_runtime_issue()
+
+    assert issue is not None
+    assert "provider.api_key" in issue
+    assert "settings.strong_model / settings.weak_model / settings.fallback_model" in issue

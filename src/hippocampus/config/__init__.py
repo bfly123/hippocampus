@@ -30,8 +30,15 @@ from .merge_support import (
     merge_dicts_skipping_empty_defaults,
     normalize_str,
 )
-from ..integration.llmgateway_runtime import load_user_gateway_runtime_profile
-from ..user_llm_config import load_user_llm_config, resolve_user_llm_config_file
+from ..integration.llmgateway_runtime import (
+    describe_user_gateway_runtime_issue,
+    load_user_gateway_runtime_profile,
+)
+from ..user_llm_config import (
+    describe_user_llm_config_issue,
+    load_user_llm_config,
+    resolve_user_llm_config_file,
+)
 
 
 class LLMPhaseModels(BaseModel):
@@ -213,6 +220,20 @@ def llm_is_configured(cfg: HippoConfig) -> bool:
 def require_llm_configured(cfg: HippoConfig) -> None:
     if llm_is_configured(cfg):
         return
+    issues = [
+        issue
+        for issue in (
+            describe_user_gateway_runtime_issue(),
+            describe_user_llm_config_issue(),
+        )
+        if issue
+    ]
+    if issues:
+        raise RuntimeError(
+            "hippocampus requires LLM configuration. "
+            f"Detected configuration issue: {'; '.join(issues)}. "
+            "Check ~/.llmgateway/config.yaml and ~/.hippocampus/config.yaml."
+        )
     raise RuntimeError(
         "hippocampus requires LLM configuration. "
         "Set ~/.llmgateway/config.yaml and ~/.hippocampus/config.yaml first."

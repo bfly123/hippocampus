@@ -12,6 +12,7 @@ from hippocampus.config import (
     LLMPhaseModels,
     LLMTemperature,
     default_config_yaml,
+    require_llm_configured,
     load_config,
 )
 
@@ -431,3 +432,41 @@ class TestLLMTemperature:
         t = LLMTemperature()
         assert t.phase_1 == 0.0
         assert t.phase_2a == 0.0
+
+
+def test_require_llm_configured_reports_gateway_parse_issue(tmp_path: Path, monkeypatch) -> None:
+    hippo_user_dir = tmp_path / "hippo-user"
+    monkeypatch.setenv("HIPPOCAMPUS_USER_CONFIG_DIR", str(hippo_user_dir))
+    gw_dir = tmp_path / "gateway-user"
+    monkeypatch.setenv("LLMGATEWAY_USER_CONFIG_DIR", str(gw_dir))
+
+    (hippo_user_dir / "config.yaml").parent.mkdir(parents=True, exist_ok=True)
+    (hippo_user_dir / "config.yaml").write_text(
+        yaml.safe_dump(
+            {
+                "version": 1,
+                "tasks": {
+                    "phase_1": {"tier": "weak"},
+                    "phase_2a": {"tier": "strong"},
+                },
+            },
+            sort_keys=False,
+        ),
+        encoding="utf-8",
+    )
+    (gw_dir / "config.yaml").parent.mkdir(parents=True, exist_ok=True)
+    (gw_dir / "config.yaml").write_text("provider: [\n", encoding="utf-8")
+
+    cfg = load_config(None, project_root=tmp_path / "project")
+
+    try:
+        require_llm_configured(cfg)
+    except RuntimeError as exc:
+        message = str(exc)
+    else:
+        raise AssertionError("require_llm_configured should have failed")
+
+    assert "Detected configuration issue:" in message
+    assert str((gw_dir / "config.yaml").resolve()) in message
+    assert "cannot be parsed" in message
+    assert "Check ~/.llmgateway/config.yaml and ~/.hippocampus/config.yaml." in message
