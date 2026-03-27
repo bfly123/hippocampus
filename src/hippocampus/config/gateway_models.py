@@ -64,6 +64,13 @@ def apply_gateway_route_defaults(cfg, profile: dict[str, Any]) -> None:
         ("model_map", profile.get("model_map"), normalize_str_dict),
     ):
         set_if_present(cfg.llm, attr, normalize(raw_value))
+    try:
+        gateway_timeout = float(profile.get("timeout", 0) or 0)
+    except (TypeError, ValueError):
+        gateway_timeout = 0.0
+    if gateway_timeout > 0:
+        current_timeout = max(1.0, float(getattr(cfg.llm, "timeout", 0) or 0))
+        cfg.llm.timeout = int(max(current_timeout, gateway_timeout))
     if cfg.llm.litellm_provider:
         return
     provider = infer_litellm_provider(str(profile.get("model", "")))

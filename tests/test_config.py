@@ -23,6 +23,7 @@ def _write_gateway_user_config(
     base_url: str = "https://backend.example/v1",
     api_key: str = "global-key",
     max_concurrent: int = 12,
+    timeout: int = 90,
     headers: dict[str, str] | None = None,
 ) -> Path:
     cfg_path = tmp_path / ".llmgateway-user" / "config.yaml"
@@ -47,7 +48,7 @@ def _write_gateway_user_config(
                     "weak_reasoning_effort": "low",
                     "max_concurrent": max_concurrent,
                     "retry_max": 3,
-                    "timeout": 90,
+                    "timeout": timeout,
                 },
             },
             sort_keys=False,
@@ -172,6 +173,117 @@ class TestLoadConfig:
         assert cfg.llm.timeout == 90
         assert cfg.llm.phase_tiers.phase_1 == "weak"
         assert cfg.llm.phase_tiers.architect == "strong"
+
+    def test_gateway_timeout_floor_applies_from_user_runtime(self, tmp_path: Path, monkeypatch):
+        user_dir = tmp_path / "hippo-user"
+        monkeypatch.setenv("HIPPOCAMPUS_USER_CONFIG_DIR", str(user_dir))
+        _write_gateway_user_config(
+            tmp_path,
+            monkeypatch,
+            base_url="https://arch.example/v1",
+            api_key="arch-key",
+            timeout=120,
+        )
+        (user_dir / "config.yaml").parent.mkdir(parents=True)
+        (user_dir / "config.yaml").write_text(
+            yaml.dump(
+                {
+                    "tiers": {
+                        "strong": {"candidates": [{"model": "gpt-5.3-codex high"}]},
+                        "weak": {"candidates": [{"model": "gpt-5.3-codex-medium"}]},
+                    },
+                }
+            ),
+            encoding="utf-8",
+        )
+
+        cfg = load_config(None, project_root=tmp_path / "project")
+        assert cfg.llm.timeout == 120
+
+    def test_explicit_route_still_uses_gateway_timeout_floor(self, tmp_path: Path, monkeypatch):
+        user_dir = tmp_path / "hippo-user"
+        monkeypatch.setenv("HIPPOCAMPUS_USER_CONFIG_DIR", str(user_dir))
+        _write_gateway_user_config(
+            tmp_path,
+            monkeypatch,
+            base_url="https://gateway.example/v1",
+            api_key="gateway-key",
+            timeout=120,
+        )
+        project = tmp_path / "project"
+        project.mkdir()
+        (user_dir / "config.yaml").parent.mkdir(parents=True)
+        (user_dir / "config.yaml").write_text(
+            yaml.dump(
+                {
+                    "tiers": {
+                        "strong": {"candidates": [{"model": "gpt-5.4"}]},
+                        "weak": {"candidates": [{"model": "gpt-5.4-mini"}]},
+                    },
+                }
+            ),
+            encoding="utf-8",
+        )
+
+        cfg_file = project / ".hippocampus" / "config.yaml"
+        cfg_file.parent.mkdir()
+        cfg_file.write_text(
+            yaml.dump(
+                {
+                    "llm": {
+                        "base_url": "https://manual.example/v1",
+                        "api_key": "manual-key",
+                    }
+                }
+            ),
+            encoding="utf-8",
+        )
+
+        cfg = load_config(cfg_file, project_root=project)
+        assert cfg.llm.base_url == "https://manual.example/v1"
+        assert cfg.llm.api_key == "manual-key"
+        assert cfg.llm.timeout == 120
+
+    def test_explicit_timeout_above_gateway_timeout_is_kept(self, tmp_path: Path, monkeypatch):
+        user_dir = tmp_path / "hippo-user"
+        monkeypatch.setenv("HIPPOCAMPUS_USER_CONFIG_DIR", str(user_dir))
+        _write_gateway_user_config(
+            tmp_path,
+            monkeypatch,
+            base_url="https://gateway.example/v1",
+            api_key="gateway-key",
+            timeout=120,
+        )
+        project = tmp_path / "project"
+        project.mkdir()
+        (user_dir / "config.yaml").parent.mkdir(parents=True)
+        (user_dir / "config.yaml").write_text(
+            yaml.dump(
+                {
+                    "tiers": {
+                        "strong": {"candidates": [{"model": "gpt-5.4"}]},
+                        "weak": {"candidates": [{"model": "gpt-5.4-mini"}]},
+                    },
+                }
+            ),
+            encoding="utf-8",
+        )
+
+        cfg_file = project / ".hippocampus" / "config.yaml"
+        cfg_file.parent.mkdir()
+        cfg_file.write_text(
+            yaml.dump(
+                {
+                    "llm": {
+                        "timeout": 180,
+                    }
+                }
+            ),
+            encoding="utf-8",
+        )
+
+        cfg = load_config(cfg_file, project_root=project)
+        assert cfg.llm.timeout == 180
 
     def test_project_default_llm_values_do_not_override_user_llm_config(self, tmp_path: Path, monkeypatch):
         user_dir = tmp_path / "hippo-user"
