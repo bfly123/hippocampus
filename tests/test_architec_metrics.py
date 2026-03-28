@@ -60,7 +60,7 @@ def test_generate_architec_metrics_artifact_skips_when_architec_missing(tmp_path
     assert status.output_path.name == "architect-metrics.json"
 
 
-def test_generate_command_generates_architec_metrics_artifact(tmp_path, monkeypatch):
+def test_generate_command_no_longer_generates_architec_metrics_artifact(tmp_path, monkeypatch):
     @click.command("init")
     @click.argument("target", required=False, default=".")
     def fake_init(target):
@@ -112,23 +112,8 @@ def test_generate_command_generates_architec_metrics_artifact(tmp_path, monkeypa
         path.write_text("<html></html>\n", encoding="utf-8")
         return path
 
-    def fake_metrics(target):
-        out = Path(target) / ".hippocampus" / "architect-metrics.json"
-        out.parent.mkdir(parents=True, exist_ok=True)
-        out.write_text("{}\n", encoding="utf-8")
-
-        class Status:
-            skipped_reason = None
-            output_path = out
-
-        return Status()
-
     monkeypatch.setattr("hippocampus.tools.snapshot.save_snapshot", fake_snapshot)
     monkeypatch.setattr("hippocampus.viz.generator.generate_viz_html", fake_viz)
-    monkeypatch.setattr(
-        "hippocampus.cli.pipeline_command_builders.generate_architec_metrics_artifact",
-        fake_metrics,
-    )
     monkeypatch.setattr(
         "hippocampus.cli.pipeline_command_builders._require_index_llm",
         lambda cfg: None,
@@ -163,5 +148,4 @@ def test_generate_command_generates_architec_metrics_artifact(tmp_path, monkeypa
     )
 
     assert result.exit_code == 0, result.output
-    assert "Step 8: Architec Metrics" in result.output
-    assert (tmp_path / ".hippocampus" / "architect-metrics.json").exists()
+    assert "Architec Metrics" not in result.output

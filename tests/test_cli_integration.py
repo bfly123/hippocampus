@@ -34,7 +34,6 @@ class TestCliHelp:
         assert "Inspect" in result.output
         assert "outputs:" in result.output
         assert "hippo overview" in result.output
-        assert ".hippocampus/architect-metrics.json" in result.output
         assert "Core Workflow:" in result.output
         assert "Explore & Inspect:" in result.output
         assert "Advanced Tools:" in result.output

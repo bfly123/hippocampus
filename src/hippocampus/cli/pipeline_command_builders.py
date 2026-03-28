@@ -16,10 +16,6 @@ from ..constants import (
     PHASE2_CACHE_FILE,
     PHASE3_CACHE_FILE,
 )
-from ..integration.architec_metrics import (
-    ArchitecMetricsError,
-    generate_architec_metrics_artifact,
-)
 
 
 def _echo_index_start(ctx: Any, *, phase_num: int | None) -> None:
@@ -51,20 +47,6 @@ def _clear_incremental_index_cache(output_dir: Path) -> list[Path]:
             cache_path.unlink()
             cleared.append(cache_path)
     return cleared
-
-
-def _generate_architec_metrics_for_target(ctx: Any, target: str | Path) -> None:
-    try:
-        status = generate_architec_metrics_artifact(target)
-    except ArchitecMetricsError as exc:
-        raise click.ClickException(str(exc)) from exc
-
-    if ctx.obj["quiet"]:
-        return
-    if status.skipped_reason:
-        click.echo(f"Skipped: {status.skipped_reason}")
-        return
-    click.echo(f"Generated: {status.output_path}")
 
 
 def build_repomap_command():
@@ -356,11 +338,7 @@ def build_update_command(*, command_refs: dict[str, object], trim_cmd, index_cmd
         )
 
         if not ctx.obj["quiet"]:
-            click.echo("=== Step 8: Architec Metrics ===")
-        _generate_architec_metrics_for_target(ctx, tgt)
-
-        if not ctx.obj["quiet"]:
-            click.echo("=== Step 9: Save Snapshot ===")
+            click.echo("=== Step 8: Save Snapshot ===")
         from ..tools.snapshot import save_snapshot
 
         snapshot = save_snapshot(out, message=snapshot_message)
@@ -368,7 +346,7 @@ def build_update_command(*, command_refs: dict[str, object], trim_cmd, index_cmd
             click.echo(f"Snapshot saved: {snapshot['snapshot_id']}")
 
         if not ctx.obj["quiet"]:
-            click.echo("=== Step 10: Generate Visualization ===")
+            click.echo("=== Step 9: Generate Visualization ===")
         from ..viz.generator import generate_viz_html
 
         viz_path = generate_viz_html(out, verbose=ctx.obj["verbose"])
@@ -463,9 +441,5 @@ def build_run_command(*, command_refs: dict[str, object], trim_cmd, index_cmd):
                 ),
             ),
         )
-
-        if not ctx.obj["quiet"]:
-            click.echo("=== Step 8: Architec Metrics ===")
-        _generate_architec_metrics_for_target(ctx, tgt)
 
     return run

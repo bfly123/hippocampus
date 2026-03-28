@@ -76,33 +76,14 @@ def test_update_runs_incremental_refresh_without_llm(tmp_path):
     (tmp_path / "src").mkdir()
     (tmp_path / "src" / "demo.py").write_text("def hello():\n    return 'world'\n", encoding="utf-8")
 
-    def fake_metrics(target):
-        out = tmp_path / ".hippocampus" / "architect-metrics.json"
-        out.parent.mkdir(parents=True, exist_ok=True)
-        out.write_text("{}\n", encoding="utf-8")
-
-        class Status:
-            skipped_reason = None
-            output_path = out
-
-        return Status()
-
     runner = CliRunner()
-    from hippocampus.cli import pipeline_command_builders
-
-    original = pipeline_command_builders.generate_architec_metrics_artifact
-    pipeline_command_builders.generate_architec_metrics_artifact = fake_metrics
-    try:
-        result = runner.invoke(
-            cli,
-            ["update", "--no-llm", str(tmp_path)],
-        )
-    finally:
-        pipeline_command_builders.generate_architec_metrics_artifact = original
+    result = runner.invoke(
+        cli,
+        ["update", "--no-llm", str(tmp_path)],
+    )
     assert result.exit_code == 0
 
     out = tmp_path / ".hippocampus"
-    assert (out / "architect-metrics.json").exists()
     assert (out / "hippocampus-index.json").exists()
     assert (out / "code-signatures.json").exists()
     assert (out / "tree.json").exists()

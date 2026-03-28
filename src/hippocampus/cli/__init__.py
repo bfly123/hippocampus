@@ -160,7 +160,6 @@ def cli(ctx, config_path, output_dir, verbose, quiet):
       .hippocampus/tree.json
       .hippocampus/structure-prompt.md
       .hippocampus/hippocampus-viz.html
-      .hippocampus/architect-metrics.json
 
     All commands remain available below; the help view is grouped so the
     common workflow appears first.
