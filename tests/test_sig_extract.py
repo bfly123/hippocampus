@@ -42,10 +42,25 @@ class TestCollectSourceFiles:
             assert not any(p.startswith(".") for p in parts)
 
     def test_only_supported_languages(self, target_path):
-        from hippocampus.parsers.lang_map import filename_to_lang
+        from hippocampus.parsers.lang_map import detect_file_language
         files = _collect_source_files(target_path)
         for f in files:
-            assert filename_to_lang(str(f)) is not None
+            assert detect_file_language(f) is not None
+
+    def test_includes_extensionless_python_script(self, tmp_path):
+        (tmp_path / "ccb").write_text(
+            "#!/usr/bin/env python3\n"
+            "import sys\n"
+            "\n"
+            "def main():\n"
+            "    return sys.argv[0]\n",
+            encoding="utf-8",
+        )
+        (tmp_path / "LICENSE").write_text("GNU Affero General Public License\n", encoding="utf-8")
+
+        files = [str(item.relative_to(tmp_path)) for item in _collect_source_files(tmp_path)]
+
+        assert files == ["ccb"]
 
 
 class TestInferParent:

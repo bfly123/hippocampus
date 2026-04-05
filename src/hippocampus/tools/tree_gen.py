@@ -5,6 +5,7 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from pathlib import Path
 
+from ..architecture_rules import ArchitectureRules, load_hippo_rules
 from ..source_filter import should_include_tree_path
 from ..types import TreeDoc, TreeNode
 from ..utils import write_json
@@ -25,7 +26,12 @@ def _is_dir_entry(name: str) -> bool:
     return name.endswith("/")
 
 
-def parse_directory_structure(text: str) -> TreeNode:
+def parse_directory_structure(
+    text: str,
+    *,
+    rules: ArchitectureRules | None = None,
+    project_root: Path | None = None,
+) -> TreeNode:
     """Parse repomix directoryStructure text into a TreeNode tree."""
     root = TreeNode(id="dir:.", type="dir", name=".")
     stack: list[tuple[int, TreeNode]] = [(-1, root)]
@@ -54,7 +60,8 @@ def parse_directory_structure(text: str) -> TreeNode:
         path_parts = [s[1].name for s in stack[1:]] + [clean_name]
         rel_path = "/".join(path_parts)
         rel_path_obj = Path(rel_path)
-        if not should_include_tree_path(rel_path_obj):
+        effective_root = None if is_dir else project_root
+        if not should_include_tree_path(rel_path_obj, rules=rules, project_root=effective_root):
             if is_dir:
                 skipped_dir_level = level
             continue
@@ -98,7 +105,11 @@ def run_tree_gen(
     if not dir_text:
         raise ValueError("No directoryStructure found in repomix output")
 
-    root = parse_directory_structure(dir_text)
+    root = parse_directory_structure(
+        dir_text,
+        rules=load_hippo_rules(target),
+        project_root=target,
+    )
     doc = TreeDoc(
         generated_at=datetime.now(timezone.utc).isoformat(),
         root=root,

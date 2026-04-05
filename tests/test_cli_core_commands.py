@@ -53,6 +53,7 @@ def test_index_accepts_no_llm_option(tmp_path):
         ["index", "--no-llm", str(tmp_path)],
     )
     assert result.exit_code == 0
+    assert (tmp_path / ".hippocampus" / "bundle-state.json").exists()
 
 
 def test_init_accepts_hidden_target_option_alias(tmp_path):
@@ -70,6 +71,7 @@ def test_index_accepts_hidden_target_option_alias(tmp_path):
     result = runner.invoke(cli, ["index", "--no-llm", "--target", str(tmp_path)])
     assert result.exit_code == 0
     assert (tmp_path / ".hippocampus" / "hippocampus-index.json").exists()
+    assert (tmp_path / ".hippocampus" / "bundle-state.json").exists()
 
 
 def test_update_runs_incremental_refresh_without_llm(tmp_path):
@@ -90,6 +92,7 @@ def test_update_runs_incremental_refresh_without_llm(tmp_path):
     assert (out / "structure-prompt-map.md").exists()
     assert (out / "structure-prompt-deep.md").exists()
     assert (out / "structure-prompt.md").exists()
+    assert (out / "bundle-state.json").exists()
     assert (out / "hippocampus-viz.html").exists()
     assert (out / "snapshots").is_dir()
 

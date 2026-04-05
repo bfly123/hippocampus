@@ -7,7 +7,7 @@ from pathlib import Path
 from ..context_summary import summarize_architect_report, summarize_index
 from ..mcp.tools import navigate_tool
 from ..nav.context_pack import deduplicate_context, render_snippets
-from ..parsers.lang_map import filename_to_lang
+from ..parsers.lang_map import detect_file_language
 from ..parsers.query_loader import find_queries_dir
 from ..parsers.ts_extract import extract_definitions
 from ..tools.sig_extract import _infer_parent
@@ -46,7 +46,7 @@ def render_context_snippets(context_snippets: list[dict]) -> str:
 
 
 def language_for_file(file_path: str | Path) -> str | None:
-    return filename_to_lang(str(file_path))
+    return detect_file_language(file_path)
 
 
 def resolve_queries_dir(project_root: str | Path) -> Path | None:

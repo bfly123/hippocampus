@@ -8,6 +8,7 @@ from collections import Counter
 from pathlib import Path
 from typing import Any, Callable
 
+from ...architecture_rules import load_hippo_rules
 from ...source_filter import build_file_manifest, should_include_architecture_file, write_file_manifest
 
 
@@ -47,14 +48,14 @@ def build_local_phase1_results(
     target: Path,
 ) -> dict[str, dict]:
     """Build minimal phase1-style results without LLM calls."""
-    del target
     sig_doc = phase0_data["signatures"]
     compress = phase0_data["compress"]
+    rules = load_hippo_rules(target)
 
     files = set(compress.get("files", {}).keys()) | set(sig_doc.files.keys())
     results: dict[str, dict] = {}
     for fp in files:
-        if not should_include_architecture_file(fp):
+        if not should_include_architecture_file(fp, rules=rules, project_root=target):
             continue
         results[fp] = {
             "desc": "",

@@ -6,8 +6,9 @@ from dataclasses import asdict, dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 
+from .architecture_rules import ArchitectureRules, load_hippo_rules, path_is_ignored
 from .constants import FILE_MANIFEST_FILE
-from .parsers.lang_map import filename_to_lang
+from .parsers.lang_map import probe_file_language
 from .utils import is_doc, is_hidden, is_runtime_artifact, write_json
 
 _ARCHITECTURE_EXCLUDED_DIRS = frozenset(
@@ -165,13 +166,22 @@ def _is_generated_path(path: Path) -> bool:
     return any(pattern in name for pattern in _GENERATED_PATTERNS)
 
 
-def classify_project_file(path: str | Path) -> FileClassification:
+def classify_project_file(
+    path: str | Path,
+    *,
+    rules: ArchitectureRules | None = None,
+    project_root: Path | None = None,
+) -> FileClassification:
     rel = Path(path)
     normalized = str(rel).replace("\\", "/").strip()
-    language = filename_to_lang(normalized)
+    probe = probe_file_language(rel, project_root=project_root)
+    language = probe.language
+    is_code = probe.is_code
 
     if not normalized:
         return FileClassification("", None, "ignored", False, False, False, "empty")
+    if path_is_ignored(rel, rules):
+        return FileClassification(normalized, language, "excluded", False, False, False, "architecture_rules")
     if is_hidden(rel):
         return FileClassification(normalized, language, "hidden", False, False, False, "hidden")
     if is_runtime_artifact(rel):
@@ -189,22 +199,39 @@ def classify_project_file(path: str | Path) -> FileClassification:
         return FileClassification(normalized, language, "generated", True, False, False, "generated")
     if _is_test_path(rel):
         return FileClassification(normalized, language, "test", True, False, True, "test")
-    if language is None:
+    if not is_code:
         return FileClassification(normalized, None, "ignored", True, False, False, "unsupported")
     return FileClassification(normalized, language, "source", True, True, False, "")
 
 
-def should_include_architecture_file(path: str | Path) -> bool:
-    return classify_project_file(path).include_in_architecture
+def should_include_architecture_file(
+    path: str | Path,
+    *,
+    rules: ArchitectureRules | None = None,
+    project_root: Path | None = None,
+) -> bool:
+    return classify_project_file(path, rules=rules, project_root=project_root).include_in_architecture
 
 
-def should_include_test_support_file(path: str | Path) -> bool:
-    return classify_project_file(path).include_in_test_support
+def should_include_test_support_file(
+    path: str | Path,
+    *,
+    rules: ArchitectureRules | None = None,
+    project_root: Path | None = None,
+) -> bool:
+    return classify_project_file(path, rules=rules, project_root=project_root).include_in_test_support
 
 
-def should_include_tree_path(path: str | Path) -> bool:
+def should_include_tree_path(
+    path: str | Path,
+    *,
+    rules: ArchitectureRules | None = None,
+    project_root: Path | None = None,
+) -> bool:
     rel = Path(path)
     if not str(rel).strip():
+        return False
+    if path_is_ignored(rel, rules):
         return False
     if is_hidden(rel) or is_runtime_artifact(rel):
         return False
@@ -223,18 +250,23 @@ def should_include_tree_path(path: str | Path) -> bool:
             return False
         if norm == "docs":
             return False
+    if is_doc(rel):
+        return False
     if rel.suffix:
-        return should_include_architecture_file(rel)
-    return True
+        return should_include_architecture_file(rel, rules=rules, project_root=project_root)
+    if project_root is None:
+        return True
+    return should_include_architecture_file(rel, rules=rules, project_root=project_root)
 
 
-def build_file_manifest(target: Path) -> dict:
+def build_file_manifest(target: Path, *, rules: ArchitectureRules | None = None) -> dict:
+    effective_rules = rules or load_hippo_rules(target)
     files: dict[str, dict[str, object]] = {}
     for p in sorted(target.rglob("*")):
         if not p.is_file():
             continue
         rel = p.relative_to(target)
-        classified = classify_project_file(rel)
+        classified = classify_project_file(rel, rules=effective_rules, project_root=target)
         if classified.kind in {"ignored", "hidden", "runtime_artifact", "excluded", "doc", "fixture"}:
             continue
         files[classified.path] = asdict(classified)

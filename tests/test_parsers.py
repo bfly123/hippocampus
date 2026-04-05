@@ -4,7 +4,12 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from hippocampus.parsers.lang_map import EXTENSION_MAP, filename_to_lang
+from hippocampus.parsers.lang_map import (
+    EXTENSION_MAP,
+    detect_file_language,
+    filename_to_lang,
+    is_probable_source_path,
+)
 
 
 class TestFilenameToLang:
@@ -54,6 +59,31 @@ class TestFilenameToLang:
                     "ruby", "java", "c", "cpp", "c_sharp"}
         actual_langs = set(EXTENSION_MAP.values())
         assert expected.issubset(actual_langs)
+
+    def test_detect_extensionless_python_script(self, tmp_path):
+        script = tmp_path / "ccb"
+        script.write_text(
+            "#!/usr/bin/env python3\n"
+            "from cli.entrypoint import run_cli_entrypoint\n"
+            "\n"
+            "def main():\n"
+            "    return run_cli_entrypoint()\n",
+            encoding="utf-8",
+        )
+
+        assert detect_file_language(script) == "python"
+        assert is_probable_source_path(script) is True
+
+    def test_detect_extensionless_doc_and_binary(self, tmp_path):
+        license_file = tmp_path / "LICENSE"
+        blob = tmp_path / "blob"
+        license_file.write_text("GNU Affero General Public License\n", encoding="utf-8")
+        blob.write_bytes(b"\x00\x01\x02")
+
+        assert detect_file_language(license_file) is None
+        assert is_probable_source_path(license_file) is False
+        assert detect_file_language(blob) is None
+        assert is_probable_source_path(blob) is False
 
 
 # ── query_loader tests ──

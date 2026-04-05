@@ -5,7 +5,7 @@ from __future__ import annotations
 import sys
 from importlib import import_module
 
-__version__ = "0.1.5"
+__version__ = "0.1.7"
 
 from .api import (
     build_index,

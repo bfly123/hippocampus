@@ -12,14 +12,22 @@ from .architec_metrics import (
     ArchitecMetricsUnavailable,
     generate_architec_metrics_artifact,
 )
+from .bundle_state import (
+    build_bundle_state,
+    compute_bundle_fingerprint,
+    write_bundle_state,
+)
 
 __all__ = [
     "ArchitecMetricsError",
     "ArchitecMetricsStatus",
     "ArchitecMetricsUnavailable",
     "HIPPOCAMPUS_LLM_CONFIG_NAME",
+    "build_bundle_state",
+    "compute_bundle_fingerprint",
     "generate_architec_metrics_artifact",
     "project_state_dir",
     "resolve_hippo_llm_config_file",
     "user_config_dir",
+    "write_bundle_state",
 ]

@@ -16,6 +16,7 @@ from ..constants import (
     PHASE2_CACHE_FILE,
     PHASE3_CACHE_FILE,
 )
+from ..integration.bundle_state import write_bundle_state
 
 
 def _echo_index_start(ctx: Any, *, phase_num: int | None) -> None:
@@ -180,6 +181,7 @@ def build_index_command():
             )
         if not result:
             return
+        write_bundle_state(tgt)
         try:
             snap = save_snapshot(out)
             if not ctx.obj["quiet"]:
@@ -232,6 +234,7 @@ def build_generate_command(*, command_refs: dict[str, object], run_cmd):
             target=target,
             set_default="keep",
         )
+        write_bundle_state(tgt)
 
         if not ctx.obj["quiet"]:
             click.echo("=== Step 3: Save Snapshot ===")
@@ -336,6 +339,7 @@ def build_update_command(*, command_refs: dict[str, object], trim_cmd, index_cmd
                 ),
             ),
         )
+        write_bundle_state(tgt)
 
         if not ctx.obj["quiet"]:
             click.echo("=== Step 8: Save Snapshot ===")
@@ -441,5 +445,6 @@ def build_run_command(*, command_refs: dict[str, object], trim_cmd, index_cmd):
                 ),
             ),
         )
+        write_bundle_state(tgt)
 
     return run

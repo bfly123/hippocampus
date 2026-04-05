@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path
 
-from .lang_map import filename_to_lang
+from .lang_map import detect_file_language
 from .query_loader import load_query
 
 
@@ -63,7 +63,7 @@ def extract_tags(
 
     Returns a list of Tag objects for definitions found in the file.
     """
-    lang = filename_to_lang(fname)
+    lang = detect_file_language(fname)
     if not lang:
         return []
 

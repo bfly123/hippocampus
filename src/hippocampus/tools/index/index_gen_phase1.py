@@ -3,6 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any, Callable
 
+from ...architecture_rules import load_hippo_rules
 from ...config import HippoConfig
 from ...constants import HIPPO_DIR
 from ...llm.gateway import create_llm_gateway
@@ -32,10 +33,11 @@ async def phase_1_impl(
     llm = create_llm_gateway(config)
     sig_doc = phase0_data["signatures"]
     compress = phase0_data["compress"]
+    rules = load_hippo_rules(target)
     files_data = {
         fp: content
         for fp, content in compress.get("files", {}).items()
-        if should_include_architecture_file(fp)
+        if should_include_architecture_file(fp, rules=rules, project_root=target)
     }
     lang_hint = detect_lang_hint_fn(target)
 

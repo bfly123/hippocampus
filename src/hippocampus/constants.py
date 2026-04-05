@@ -24,6 +24,7 @@ MEMORY_RECORDS_FILE = "memory-records.jsonl"
 MEMORY_METADATA_FILE = "memory-metadata.json"
 ARCHITECT_REPORT_FILE = "architect-report.json"
 ARCHITECT_METRICS_FILE = "architect-metrics.json"
+BUNDLE_STATE_FILE = "bundle-state.json"
 
 # Schema versions
 SIGNATURES_SCHEMA_VERSION = 1

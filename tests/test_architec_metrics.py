@@ -115,6 +115,10 @@ def test_generate_command_no_longer_generates_architec_metrics_artifact(tmp_path
     monkeypatch.setattr("hippocampus.tools.snapshot.save_snapshot", fake_snapshot)
     monkeypatch.setattr("hippocampus.viz.generator.generate_viz_html", fake_viz)
     monkeypatch.setattr(
+        "hippocampus.cli.pipeline_command_builders.write_bundle_state",
+        lambda _target: None,
+    )
+    monkeypatch.setattr(
         "hippocampus.cli.pipeline_command_builders._require_index_llm",
         lambda cfg: None,
     )
